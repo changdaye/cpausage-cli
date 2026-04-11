@@ -1,0 +1,9 @@
+.DS_Store
+.venv/
+__pycache__/
+build/
+dist/
+codex-auth-quota-inspector
+cliproxyapi-quota-inspector
+cpa-quota-inspector
+*.pyc
