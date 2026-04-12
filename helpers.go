@@ -103,6 +103,39 @@ func formatCountMap(m map[string]int) string {
 	return strings.Join(parts, ", ")
 }
 
+func formatStatusCounts(m map[string]int) string {
+	if len(m) == 0 {
+		return "-"
+	}
+
+	ordered := []string{"full", "high", "medium", "low", "exhausted", "error", "missing"}
+	seen := make(map[string]struct{}, len(m))
+	parts := make([]string, 0, len(m))
+
+	for _, key := range ordered {
+		value, ok := m[key]
+		if !ok {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s:%d", key, value))
+		seen[key] = struct{}{}
+	}
+
+	extraKeys := make([]string, 0, len(m))
+	for key := range m {
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		extraKeys = append(extraKeys, key)
+	}
+	sort.Strings(extraKeys)
+	for _, key := range extraKeys {
+		parts = append(parts, fmt.Sprintf("%s:%d", key, m[key]))
+	}
+
+	return strings.Join(parts, ", ")
+}
+
 func truncate(v string, width int) string {
 	if width <= 0 {
 		return ""

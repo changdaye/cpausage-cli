@@ -1,161 +1,227 @@
-# CLIProxyAPI Quota Inspector
+# cpausage
 
-[中文版本](./README_CN.md)
+![cpausage](./img.png)
 
----
+`cpausage` 是一个基于 CPA 管理接口的命令行配额查询工具，用来批量查看账号的 `code-5h`、`code-7d` 使用情况，并在终端里输出清晰的汇总报表。
 
-![CLIProxyAPI Quota Inspector](./img.png)
+这个项目适合已经在使用 CPA 的场景，重点是直接读取实时数据，不做离线猜测。
 
-Live quota inspector for CPA management APIs.
+## 功能简介
 
-This project queries real quota windows from a running CPA instance and renders a terminal report with plan-aware sorting, status coloring, and quota bar visualization.
+- 读取 CPA 管理接口中的认证文件列表
+- 批量查询账号真实配额窗口
+- 按计划类型和剩余额度排序
+- 输出彩色表格、纯文本汇总或 JSON
+- 支持环境变量、命令行参数和 JSON 配置文件
+- 每次推送代码到 GitHub 后自动创建一个新的 Release
 
-## Why this tool
+## 获取方式
 
-- Uses live data from CPA management routes instead of offline estimation.
-- Shows account-level `code 5h` and `code 7d` quota windows.
-- Aggregates equivalent quota percentages per plan (`free`, `plus`).
-- Supports progress display while querying many auth files.
+### 方式 1：直接下载 GitHub Release
 
-## Data source
+仓库已配置自动 Release。每次代码 push 到 GitHub 后，都会自动生成一个新的 Release，并附带对应平台的二进制压缩包和校验文件。
 
-The tool mirrors CPA management flow for currently supported providers:
+下载后解压，把 `cpausage` 放到你的 `PATH` 中即可，例如：
+
+```bash
+chmod +x cpausage
+mv cpausage /usr/local/bin/cpausage
+```
+
+### 方式 2：本地构建
+
+```bash
+git clone <你的私有仓库地址>
+cd <仓库目录>
+go build -o dist/cpausage .
+```
+
+## 使用前准备
+
+你至少需要这两项配置：
+
+- `CPA_BASE_URL`：CPA 地址，例如 `http://127.0.0.1:8317`
+- `CPA_MANAGEMENT_KEY`：CPA 管理密钥
+
+推荐直接写到 shell 环境变量中，例如 `~/.zshrc`：
+
+```bash
+export CPA_BASE_URL="http://127.0.0.1:8317"
+export CPA_MANAGEMENT_KEY="YOUR_MANAGEMENT_KEY"
+```
+
+然后执行：
+
+```bash
+source ~/.zshrc
+```
+
+## 最常用的用法
+
+查看完整报表：
+
+```bash
+cpausage
+```
+
+只看汇总：
+
+```bash
+cpausage --summary-only --plain
+```
+
+输出 JSON：
+
+```bash
+cpausage --json
+```
+
+筛选低额度账号：
+
+```bash
+cpausage --filter-status low
+```
+
+筛选某种计划：
+
+```bash
+cpausage --filter-plan free
+```
+
+如果你不想使用环境变量，也可以直接传参数：
+
+```bash
+cpausage \
+  --cpa-base-url http://127.0.0.1:8317 \
+  --management-key YOUR_MANAGEMENT_KEY
+```
+
+也支持直接传管理页面地址：
+
+```bash
+cpausage \
+  --url http://127.0.0.1:8317/management.html#/login \
+  --management-password YOUR_MANAGEMENT_KEY
+```
+
+## 配置方式
+
+支持 4 种配置来源，优先级如下：
+
+1. 命令行参数
+2. 环境变量
+3. JSON 配置文件
+4. 默认值
+
+### 环境变量
+
+- `CPA_BASE_URL`
+- `CPA_URL`
+- `CPA_MANAGEMENT_KEY`
+- `CPA_MANAGEMENT_PASSWORD`
+- `MANAGEMENT_PASSWORD`
+
+### JSON 配置文件
+
+可以在以下任一位置放置 JSON 配置文件：
+
+- 可执行文件同目录下的 `cpausage.json`
+- 可执行文件同目录下的 `cpa-quota-inspector.json`
+- `~/.config/cpa-usage/config.json`
+
+示例：
+
+```json
+{
+  "login_url": "http://127.0.0.1:8317/management.html#/login",
+  "management_password": "YOUR_MANAGEMENT_KEY"
+}
+```
+
+## 主要参数
+
+- `--cpa-base-url`：CPA 地址
+- `--cpa-url`、`--url`：`--cpa-base-url` 别名
+- `--management-key`、`-k`：管理密钥
+- `--management-password`、`-p`：管理密钥别名
+- `--config`：指定 JSON 配置文件
+- `--json`：输出 JSON
+- `--plain`：输出纯文本
+- `--summary-only`：仅输出汇总
+- `--filter-plan`：按计划类型过滤
+- `--filter-status`：按状态过滤
+- `--concurrency`：并发查询数
+- `--timeout`：超时秒数
+- `--retry-attempts`：失败重试次数
+- `--ascii-bars`：使用 ASCII 进度条
+- `--no-progress`：关闭查询进度
+- `--version`：输出版本信息
+
+## 输出说明
+
+状态按 `code-7d` 剩余额度划分：
+
+- `full`
+- `high`
+- `medium`
+- `low`
+- `exhausted`
+
+底部 `status_counts` 的展示顺序也是按额度从多到少固定输出：
+
+```text
+full -> high -> medium -> low -> exhausted
+```
+
+## 数据来源
+
+工具复用了 CPA 管理接口的链路：
 
 1. `GET /v0/management/auth-files`
 2. `POST /v0/management/api-call`
-3. CPA forwards upstream request to `https://chatgpt.com/backend-api/wham/usage`
+3. CPA 再向上游请求配额接口
 
-## Status model
+## 自动 Release
 
-Status is derived from `code-7d` remaining percentage:
+仓库内置 GitHub Actions 工作流：
 
-- `0` -> `exhausted`
-- `0-30` -> `low`
-- `30-70` -> `medium`
-- `70-100` -> `high`
-- `100` -> `full`
+- 工作流文件：`.github/workflows/auto-release.yml`
+- 触发方式：每次 push 到 GitHub
+- 自动行为：
+  - 运行 `go test ./...`
+  - 自动生成一个新的 tag
+  - 使用 GoReleaser 构建多平台压缩包
+  - 自动创建 GitHub Release
+  - 上传构建产物和校验文件
 
-## Features
+如果你把项目推到新的私有仓库，记得在 GitHub 仓库设置里启用 Actions，并允许 `GITHUB_TOKEN` 具备 `contents: write` 权限。
 
-- Static report output (default) with colored plan and status.
-- Terminal-width adaptive table layout.
-- Unicode gradient quota bars with `--ascii-bars` fallback.
-- Optional real-time fetch progress with current auth file name.
-- JSON mode for automation.
-- Retry for transient query failures.
+## 开发
 
-## Requirements
-
-- Go `1.25+`
-- Running CPA service
-- CPA management key (if enabled)
-
-## Build
-
-```bash
-go build -o cpa-quota-inspector .
-```
-
-## Quick start
-
-```bash
-./cpa-quota-inspector -k YOUR_MANAGEMENT_KEY
-```
-
-## CLI flags
-
-- `--cpa-base-url`: CPA base URL
-- `--management-key`, `-k`: management bearer key
-- `--concurrency`: concurrent quota workers
-- `--timeout`: HTTP timeout seconds
-- `--retry-attempts`: transient retry count
-- `--version`: print version/build metadata
-- `--filter-plan`: filter by `plan_type`
-- `--filter-status`: filter by status
-- `--json`: print JSON payload
-- `--plain`: plain text output
-- `--summary-only`: summary only
-- `--ascii-bars`: ASCII quota bars instead of Unicode bars
-- `--no-progress`: disable fetch progress line
-
-## Examples
-
-JSON output:
-
-```bash
-./cpa-quota-inspector \
-  --json \
-  --cpa-base-url http://127.0.0.1:8317 \
-  -k YOUR_MANAGEMENT_KEY
-```
-
-Disable progress line:
-
-```bash
-./cpa-quota-inspector \
-  --no-progress \
-  --cpa-base-url http://127.0.0.1:8317 \
-  -k YOUR_MANAGEMENT_KEY
-```
-
-ASCII bars:
-
-```bash
-./cpa-quota-inspector \
-  --ascii-bars \
-  --cpa-base-url http://127.0.0.1:8317 \
-  -k YOUR_MANAGEMENT_KEY
-```
-
-Print version metadata:
-
-```bash
-./cpa-quota-inspector --version
-```
-
-## Sorting and summary
-
-- Default order: plan rank (`free`, `team`, `plus`, others) then ascending `code-7d` remaining.
-- Summary includes:
-  - `plan_counts`
-  - `status_counts`
-  - `free_equivalent_7d`
-  - `plus_equivalent_7d`
-
-## Project structure
-
-- `main.go`: CLI entrypoint and orchestration
-- `types.go`: constants and data models
-- `fetch.go`: API calls, parsing, status derivation
-- `render.go`: terminal report rendering
-- `helpers.go`: shared helpers and formatting utilities
-
-## Development
-
-Format and test:
+格式化并测试：
 
 ```bash
 gofmt -w *.go
 go test ./...
 ```
 
-## Release
-
-Create and push a semantic tag:
+本地构建：
 
 ```bash
-git checkout main
-git pull
-git tag -a v0.1.0 -m "v0.1.0"
-git push origin v0.1.0
+mkdir -p dist
+go build -o dist/cpausage .
 ```
 
-Build multi-platform artifacts with GoReleaser:
+## 项目结构
 
-```bash
-goreleaser release --clean
-```
+- `main.go`：命令入口与参数解析
+- `config.go`：配置文件加载与路径解析
+- `fetch.go`：请求、解析、状态计算
+- `render.go`：终端报表输出
+- `helpers.go`：通用辅助函数
+- `.goreleaser.yml`：Release 打包配置
 
-## Notes
+## 说明
 
-- Code review quota is intentionally not displayed.
+- 当前不展示 code review 配额。
+- 这是一个命令行工具，不依赖 Web 页面。

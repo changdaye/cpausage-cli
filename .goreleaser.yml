@@ -1,9 +1,11 @@
+project_name: cpausage
+
 version: 2
 
 builds:
   - id: cpa-quota-inspector
     main: .
-    binary: cpa-quota-inspector
+    binary: cpausage
     env:
       - CGO_ENABLED=0
     goos:

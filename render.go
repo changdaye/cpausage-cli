@@ -12,8 +12,8 @@ import (
 
 func renderPlain(reports []quotaReport, sum summary, summaryOnly bool) {
 	fmt.Printf("Accounts: %d\n", sum.Accounts)
-	fmt.Printf("Status counts: %v\n", sum.StatusCounts)
-	fmt.Printf("Plan counts: %v\n", sum.PlanCounts)
+	fmt.Printf("Status counts: %s\n", formatStatusCounts(sum.StatusCounts))
+	fmt.Printf("Plan counts: %s\n", formatCountMap(sum.PlanCounts))
 	fmt.Printf("Exhausted: %d\n", sum.ExhaustedAccounts)
 	fmt.Printf("Low: %d\n", sum.LowAccounts)
 	fmt.Printf("Errors: %d\n", sum.ErrorAccounts)
@@ -137,7 +137,7 @@ func renderPrettyReport(reports []quotaReport, sum summary, cfg config) {
 	fmt.Println()
 	fmt.Println(themeTitle.Render("Summary"))
 	fmt.Println(themeDim.Render("plan_counts: " + formatCountMap(sum.PlanCounts)))
-	fmt.Println(themeDim.Render("status_counts: " + formatCountMap(sum.StatusCounts)))
+	fmt.Println(themeDim.Render("status_counts: " + formatStatusCounts(sum.StatusCounts)))
 	fmt.Println(themeDim.Render(fmt.Sprintf("free_equivalent_7d: %.0f%%", sum.FreeEquivalent7D)))
 	fmt.Println(themeDim.Render(fmt.Sprintf("plus_equivalent_7d: %.0f%%", sum.PlusEquivalent7D)))
 }

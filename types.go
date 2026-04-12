@@ -20,6 +20,7 @@ var whamHeaders = map[string]string{
 type config struct {
 	BaseURL       string
 	ManagementKey string
+	ConfigPath    string
 	ShowVersion   bool
 	JSON          bool
 	Plain         bool

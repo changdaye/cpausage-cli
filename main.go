@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -12,7 +13,11 @@ import (
 )
 
 func main() {
-	cfg := parseFlags()
+	cfg, err := parseFlags()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
 	if cfg.ShowVersion {
 		fmt.Println(versionString())
 		return
@@ -50,11 +55,18 @@ func main() {
 	renderPrettyReport(filtered, sum, cfg)
 }
 
-func parseFlags() config {
+func parseFlags() (config, error) {
 	cfg := config{}
-	flag.StringVar(&cfg.BaseURL, "cpa-base-url", defaultCPABaseURL, "CPA base URL")
-	flag.StringVar(&cfg.ManagementKey, "management-key", "", "CPA management key")
-	flag.StringVar(&cfg.ManagementKey, "k", "", "Alias of --management-key")
+	var baseURLFlag string
+	var managementSecret string
+	flag.StringVar(&baseURLFlag, "cpa-base-url", "", "CPA base URL or management page URL")
+	flag.StringVar(&baseURLFlag, "cpa-url", "", "Alias of --cpa-base-url")
+	flag.StringVar(&baseURLFlag, "url", "", "Short alias of --cpa-base-url")
+	flag.StringVar(&managementSecret, "management-key", "", "CPA management bearer key")
+	flag.StringVar(&managementSecret, "management-password", "", "Alias of --management-key")
+	flag.StringVar(&managementSecret, "k", "", "Alias of --management-key")
+	flag.StringVar(&managementSecret, "p", "", "Alias of --management-password")
+	flag.StringVar(&cfg.ConfigPath, "config", "", "Path to JSON config file")
 	flag.BoolVar(&cfg.ShowVersion, "version", false, "Print version/build information")
 	flag.BoolVar(&cfg.JSON, "json", false, "Print JSON output")
 	flag.BoolVar(&cfg.Plain, "plain", false, "Print plain output")
@@ -68,8 +80,17 @@ func parseFlags() config {
 	flag.IntVar(&cfg.RetryAttempts, "retry-attempts", defaultRetryAttempts, "Retry attempts for transient per-account quota queries")
 	flag.Parse()
 
-	cfg.BaseURL = normalizeBaseURL(cfg.BaseURL)
-	cfg.ManagementKey = resolveManagementKey(cfg.ManagementKey)
+	if cfg.ShowVersion {
+		return cfg, nil
+	}
+
+	fileCfg, err := loadUserConfig(cfg.ConfigPath)
+	if err != nil {
+		return config{}, err
+	}
+
+	cfg.BaseURL = resolveBaseURL(baseURLFlag, fileCfg)
+	cfg.ManagementKey = resolveManagementKey(managementSecret, fileCfg)
 	if cfg.Concurrency < 1 {
 		cfg.Concurrency = 1
 	}
@@ -80,28 +101,71 @@ func parseFlags() config {
 		*timeoutSeconds = defaultTimeoutSeconds
 	}
 	cfg.Timeout = time.Duration(*timeoutSeconds) * time.Second
-	return cfg
+	return cfg, nil
+}
+
+func resolveBaseURL(explicit string, fileCfg userConfig) string {
+	for _, candidate := range []string{
+		explicit,
+		strings.TrimSpace(os.Getenv("CPA_BASE_URL")),
+		strings.TrimSpace(os.Getenv("CPA_URL")),
+		configBaseURL(fileCfg),
+		defaultCPABaseURL,
+	} {
+		if normalized := normalizeBaseURL(candidate); normalized != "" {
+			return normalized
+		}
+	}
+	return defaultCPABaseURL
 }
 
 func normalizeBaseURL(v string) string {
 	raw := strings.TrimSpace(v)
 	if raw == "" {
-		return defaultCPABaseURL
+		return ""
 	}
-	raw = strings.TrimSuffix(raw, "/")
-	raw = strings.ReplaceAll(raw, "/v0/management", "")
 	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
 		raw = "http://" + raw
 	}
-	return raw
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		raw = strings.TrimSuffix(raw, "/")
+		raw = strings.ReplaceAll(raw, "/v0/management", "")
+		raw = strings.TrimSuffix(raw, "/management.html")
+		raw = strings.TrimSuffix(raw, "/login")
+		return strings.TrimSuffix(raw, "/")
+	}
+
+	path := strings.TrimRight(parsed.EscapedPath(), "/")
+	for _, suffix := range []string{
+		"/v0/management/auth-files",
+		"/v0/management/api-call",
+		"/v0/management",
+		"/management.html",
+		"/login",
+	} {
+		path = strings.TrimSuffix(path, suffix)
+	}
+	if path == "/" {
+		path = ""
+	}
+	parsed.Path = path
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return strings.TrimSuffix(parsed.String(), "/")
 }
 
-func resolveManagementKey(explicit string) string {
-	if strings.TrimSpace(explicit) != "" {
-		return strings.TrimSpace(explicit)
-	}
-	for _, key := range []string{"MANAGEMENT_PASSWORD", "CPA_MANAGEMENT_KEY"} {
-		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+func resolveManagementKey(explicit string, fileCfg userConfig) string {
+	for _, candidate := range []string{
+		explicit,
+		strings.TrimSpace(os.Getenv("CPA_MANAGEMENT_KEY")),
+		strings.TrimSpace(os.Getenv("CPA_MANAGEMENT_PASSWORD")),
+		strings.TrimSpace(os.Getenv("MANAGEMENT_PASSWORD")),
+		configManagementKey(fileCfg),
+	} {
+		if v := strings.TrimSpace(candidate); v != "" {
 			return v
 		}
 	}
