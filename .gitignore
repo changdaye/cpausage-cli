@@ -5,9 +5,11 @@ __pycache__/
 .env.*
 build/
 dist/
+cpausage
 cpausage.json
 cpa-quota-inspector.json
 codex-auth-quota-inspector
 cliproxyapi-quota-inspector
 cpa-quota-inspector
+ScreenShot_*.png
 *.pyc
