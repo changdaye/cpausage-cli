@@ -35,8 +35,8 @@ jobs:
         id: meta
         run: |
           short_sha="${GITHUB_SHA::7}"
-          timestamp="$(date -u +'%Y%m%d.%H%M%S')"
-          tag="v0.0.0-auto.${timestamp}.${short_sha}"
+          timestamp="$(date -u +'%Y%m%dt%H%M%S')"
+          tag="v0.0.0-auto-${timestamp}-${short_sha}"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
