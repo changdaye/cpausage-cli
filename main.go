@@ -71,6 +71,7 @@ func parseFlags() (config, error) {
 	flag.BoolVar(&cfg.JSON, "json", false, "Print JSON output")
 	flag.BoolVar(&cfg.Plain, "plain", false, "Print plain output")
 	flag.BoolVar(&cfg.SummaryOnly, "summary-only", false, "Print summary only")
+	flag.StringVar(&cfg.Style, "style", "1", "Pretty output style: 1 (classic) or 2 (cards)")
 	flag.BoolVar(&cfg.ASCIIBars, "ascii-bars", false, "Use ASCII progress bars instead of Unicode bars")
 	flag.BoolVar(&cfg.NoProgress, "no-progress", false, "Disable quota query progress output")
 	flag.StringVar(&cfg.FilterPlan, "filter-plan", "", "Only show accounts with this plan_type")
@@ -83,6 +84,11 @@ func parseFlags() (config, error) {
 	if cfg.ShowVersion {
 		return cfg, nil
 	}
+	normalizedStyle, err := normalizePrettyStyle(cfg.Style)
+	if err != nil {
+		return config{}, err
+	}
+	cfg.Style = normalizedStyle
 
 	fileCfg, err := loadUserConfig(cfg.ConfigPath)
 	if err != nil {
@@ -102,6 +108,17 @@ func parseFlags() (config, error) {
 	}
 	cfg.Timeout = time.Duration(*timeoutSeconds) * time.Second
 	return cfg, nil
+}
+
+func normalizePrettyStyle(v string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "1", "classic", "default":
+		return "1", nil
+	case "2", "cards", "card":
+		return "2", nil
+	default:
+		return "", fmt.Errorf("invalid --style %q (supported: 1, 2)", v)
+	}
 }
 
 func resolveBaseURL(explicit string, fileCfg userConfig) string {
