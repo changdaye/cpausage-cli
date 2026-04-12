@@ -95,3 +95,36 @@ func TestUniqueStrings(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizePrettyStyle(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{name: "default numeric", in: "1", want: "1"},
+		{name: "classic alias", in: "classic", want: "1"},
+		{name: "cards numeric", in: "2", want: "2"},
+		{name: "cards alias", in: "cards", want: "2"},
+		{name: "invalid", in: "grid", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizePrettyStyle(tt.in)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("normalizePrettyStyle(%q) error = nil, want non-nil", tt.in)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("normalizePrettyStyle(%q) error = %v", tt.in, err)
+			}
+			if got != tt.want {
+				t.Fatalf("normalizePrettyStyle(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}

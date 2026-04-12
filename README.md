@@ -64,6 +64,12 @@ source ~/.zshrc
 cpausage
 ```
 
+查看第二样式报表：
+
+```bash
+cpausage --style 2
+```
+
 只看汇总：
 
 ```bash
@@ -148,6 +154,7 @@ cpausage \
 - `--json`：输出 JSON
 - `--plain`：输出纯文本
 - `--summary-only`：仅输出汇总
+- `--style`：美化输出样式，`1` 为经典表格，`2` 为卡片摘要样式
 - `--filter-plan`：按计划类型过滤
 - `--filter-status`：按状态过滤
 - `--concurrency`：并发查询数
@@ -172,6 +179,11 @@ cpausage \
 ```text
 full -> high -> medium -> low -> exhausted
 ```
+
+美化输出支持两种样式：
+
+- `--style 1`：经典表格，保持原有汇总区和明细表
+- `--style 2`：卡片摘要样式，顶部显示连接信息，底部显示 `Total / Free / Plus` 和状态卡片
 
 ## 数据来源
 

@@ -25,6 +25,7 @@ type config struct {
 	JSON          bool
 	Plain         bool
 	SummaryOnly   bool
+	Style         string
 	ASCIIBars     bool
 	NoProgress    bool
 	FilterPlan    string
