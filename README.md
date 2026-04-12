@@ -64,6 +64,8 @@ source ~/.zshrc
 cpausage
 ```
 
+默认美化输出使用 `--style 1`，也就是经典表格样式。
+
 查看第二样式报表：
 
 ```bash
@@ -184,6 +186,16 @@ full -> high -> medium -> low -> exhausted
 
 - `--style 1`：经典表格，保持原有汇总区和明细表
 - `--style 2`：卡片摘要样式，顶部显示连接信息，底部显示 `Total / Free / Plus` 和状态卡片
+
+推荐用法：
+
+```bash
+# 经典样式
+cpausage --style 1
+
+# 第二样式（卡片摘要）
+cpausage --style 2
+```
 
 ## 数据来源
 
