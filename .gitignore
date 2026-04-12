@@ -1,8 +1,12 @@
 .DS_Store
 .venv/
 __pycache__/
+.env
+.env.*
 build/
 dist/
+cpausage.json
+cpa-quota-inspector.json
 codex-auth-quota-inspector
 cliproxyapi-quota-inspector
 cpa-quota-inspector
