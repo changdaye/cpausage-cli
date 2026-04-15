@@ -12,13 +12,14 @@ import (
 
 func renderPlain(reports []quotaReport, sum summary, summaryOnly bool) {
 	fmt.Printf("Accounts: %d\n", sum.Accounts)
-	fmt.Printf("Status counts: %s\n", formatStatusCounts(sum.StatusCounts))
-	fmt.Printf("Plan counts: %s\n", formatCountMap(sum.PlanCounts))
 	fmt.Printf("Exhausted: %d\n", sum.ExhaustedAccounts)
 	fmt.Printf("Low: %d\n", sum.LowAccounts)
 	fmt.Printf("Errors: %d\n", sum.ErrorAccounts)
 	fmt.Printf("Free Equivalent 7d: %.0f%%\n", sum.FreeEquivalent7D)
-	fmt.Printf("Plus Equivalent 7d: %.0f%%\n", sum.PlusEquivalent7D)
+	fmt.Printf("Token Usage Today: %s\n", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Today))
+	fmt.Printf("Token Usage 24h: %s\n", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last24Hours))
+	fmt.Printf("Token Usage 7d: %s\n", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last7Days))
+	fmt.Printf("Token Usage 30d: %s\n", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last30Days))
 	if summaryOnly {
 		return
 	}
@@ -145,10 +146,11 @@ func renderPrettyReportStyle1(reports []quotaReport, sum summary, cfg config) {
 
 	fmt.Println()
 	fmt.Println(themeTitle.Render("Summary"))
-	fmt.Println(themeDim.Render("plan_counts: " + formatCountMap(sum.PlanCounts)))
-	fmt.Println(themeDim.Render("status_counts: " + formatStatusCounts(sum.StatusCounts)))
 	fmt.Println(themeDim.Render(fmt.Sprintf("free_equivalent_7d: %.0f%%", sum.FreeEquivalent7D)))
-	fmt.Println(themeDim.Render(fmt.Sprintf("plus_equivalent_7d: %.0f%%", sum.PlusEquivalent7D)))
+	fmt.Println(themeDim.Render("token_usage_today: " + formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Today)))
+	fmt.Println(themeDim.Render("token_usage_24h: " + formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last24Hours)))
+	fmt.Println(themeDim.Render("token_usage_7d: " + formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last7Days)))
+	fmt.Println(themeDim.Render("token_usage_30d: " + formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last30Days)))
 }
 
 func renderPrettyReportStyle2(reports []quotaReport, sum summary, cfg config) {
@@ -229,24 +231,17 @@ func renderSummaryCards(sum summary, termWidth int) string {
 	summaryCards := []string{
 		renderMetricCard("Total", fmt.Sprintf("%d", sum.Accounts), "", "#FDE68A", 16),
 		renderMetricCard("Free", fmt.Sprintf("%.0f%%", sum.FreeEquivalent7D), "", "#34D399", 16),
-		renderMetricCard("Plus", fmt.Sprintf("%.0f%%", sum.PlusEquivalent7D), "", "#60A5FA", 16),
 	}
 
-	statusCards := make([]string, 0, 6)
-	for _, status := range []string{"full", "high", "medium", "low", "exhausted"} {
-		statusCards = append(statusCards, renderMetricCard(
-			statusDisplayName(status),
-			fmt.Sprintf("%d", sum.StatusCounts[status]),
-			"",
-			statusColor(status),
-			12,
-		))
-	}
-	if sum.ErrorAccounts > 0 {
-		statusCards = append(statusCards, renderMetricCard("Errors", fmt.Sprintf("%d", sum.ErrorAccounts), "", statusColor("error"), 12))
+	tokenCards := []string{
+		renderMetricCard("Tokens Today", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Today), "", "#F97316", 18),
+		renderMetricCard("Tokens 24h", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last24Hours), "", "#FB923C", 18),
+		renderMetricCard("Tokens 7d", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last7Days), "", "#F59E0B", 18),
+		renderMetricCard("Tokens 30d", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last30Days), "", "#D97706", 18),
 	}
 
-	return renderCardRows(summaryCards, termWidth, 2) + "\n\n" + renderCardRows(statusCards, termWidth, 2)
+	return renderCardRows(summaryCards, termWidth, 2) + "\n\n" +
+		renderCardRows(tokenCards, termWidth, 2)
 }
 
 func renderMetricCard(title, value, subtitle, accent string, minWidth int) string {
@@ -504,4 +499,11 @@ func asciiProgress(value *float64, width int) string {
 		filled = width
 	}
 	return "[" + strings.Repeat("#", filled) + strings.Repeat("-", width-filled) + fmt.Sprintf("] %3.0f%%", v)
+}
+
+func formatTokenUsageValue(available bool, value int64) string {
+	if !available {
+		return "-"
+	}
+	return formatInt64WithCommas(value)
 }

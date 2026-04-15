@@ -53,21 +53,31 @@ type quotaReport struct {
 	Windows           []quotaWindow `json:"windows"`
 	AdditionalWindows []quotaWindow `json:"additional_windows"`
 	Error             string        `json:"error,omitempty"`
+	tokenUsage        tokenUsageSummary
+}
+
+type tokenUsageSummary struct {
+	Available   bool  `json:"available"`
+	Today       int64 `json:"today"`
+	Last24Hours int64 `json:"last_24_hours"`
+	Last7Days   int64 `json:"last_7_days"`
+	Last30Days  int64 `json:"last_30_days"`
 }
 
 type summary struct {
-	Accounts          int            `json:"accounts"`
-	StatusCounts      map[string]int `json:"status_counts"`
-	PlanCounts        map[string]int `json:"plan_counts"`
-	ExhaustedAccounts int            `json:"exhausted_accounts"`
-	LowAccounts       int            `json:"low_accounts"`
-	ErrorAccounts     int            `json:"error_accounts"`
-	AdditionalWindows int            `json:"additional_windows"`
-	ExhaustedNames    []string       `json:"exhausted_names"`
-	LowNames          []string       `json:"low_names"`
-	ErrorNames        []string       `json:"error_names"`
-	FreeEquivalent7D  float64        `json:"free_equivalent_7d"`
-	PlusEquivalent7D  float64        `json:"plus_equivalent_7d"`
+	Accounts          int               `json:"accounts"`
+	StatusCounts      map[string]int    `json:"status_counts"`
+	PlanCounts        map[string]int    `json:"plan_counts"`
+	ExhaustedAccounts int               `json:"exhausted_accounts"`
+	LowAccounts       int               `json:"low_accounts"`
+	ErrorAccounts     int               `json:"error_accounts"`
+	AdditionalWindows int               `json:"additional_windows"`
+	ExhaustedNames    []string          `json:"exhausted_names"`
+	LowNames          []string          `json:"low_names"`
+	ErrorNames        []string          `json:"error_names"`
+	FreeEquivalent7D  float64           `json:"free_equivalent_7d"`
+	PlusEquivalent7D  float64           `json:"plus_equivalent_7d"`
+	TokenUsage        tokenUsageSummary `json:"token_usage"`
 }
 
 type authEntry struct {

@@ -217,6 +217,15 @@ func mergeMaps(base, extra map[string]string) map[string]string {
 	return out
 }
 
+func fetchTokenUsageByAuth(ctx context.Context, cfg config, now time.Time) (map[string]tokenUsageSummary, error) {
+	client := &http.Client{Timeout: cfg.Timeout}
+	payload, err := fetchJSON(ctx, client, cfg, cfg.BaseURL+"/v0/management/usage")
+	if err != nil {
+		return nil, err
+	}
+	return parseTokenUsageByAuth(payload, now), nil
+}
+
 func fetchJSON(ctx context.Context, client *http.Client, cfg config, url string) (map[string]any, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -538,6 +547,93 @@ func shouldRetryError(message string) bool {
 	return false
 }
 
+func parseTokenUsageByAuth(payload map[string]any, now time.Time) map[string]tokenUsageSummary {
+	usage, _ := payload["usage"].(map[string]any)
+	apis, _ := usage["apis"].(map[string]any)
+	if len(apis) == 0 {
+		return map[string]tokenUsageSummary{}
+	}
+
+	if now.IsZero() {
+		now = time.Now()
+	}
+	loc := now.Location()
+	todayStart := time.Date(now.In(loc).Year(), now.In(loc).Month(), now.In(loc).Day(), 0, 0, 0, 0, loc)
+	last24Hours := now.Add(-24 * time.Hour)
+	last7Days := now.Add(-7 * 24 * time.Hour)
+	last30Days := now.Add(-30 * 24 * time.Hour)
+
+	out := make(map[string]tokenUsageSummary)
+	for _, apiValue := range apis {
+		apiEntry, ok := apiValue.(map[string]any)
+		if !ok {
+			continue
+		}
+		models, _ := apiEntry["models"].(map[string]any)
+		for _, modelValue := range models {
+			modelEntry, ok := modelValue.(map[string]any)
+			if !ok {
+				continue
+			}
+			details, _ := modelEntry["details"].([]any)
+			for _, detailValue := range details {
+				detail, ok := detailValue.(map[string]any)
+				if !ok {
+					continue
+				}
+				authIndex := cleanString(firstValue(detail["auth_index"], detail["authIndex"]))
+				timestampText := cleanString(detail["timestamp"])
+				if authIndex == "" || timestampText == "" {
+					continue
+				}
+				timestamp, err := time.Parse(time.RFC3339Nano, timestampText)
+				if err != nil {
+					continue
+				}
+				totalTokens := tokenTotalFromDetail(detail)
+				current := out[authIndex]
+				current.Available = true
+				if !timestamp.In(loc).Before(todayStart) {
+					current.Today += totalTokens
+				}
+				if !timestamp.Before(last24Hours) {
+					current.Last24Hours += totalTokens
+				}
+				if !timestamp.Before(last7Days) {
+					current.Last7Days += totalTokens
+				}
+				if !timestamp.Before(last30Days) {
+					current.Last30Days += totalTokens
+				}
+				out[authIndex] = current
+			}
+		}
+	}
+	return out
+}
+
+func tokenTotalFromDetail(detail map[string]any) int64 {
+	tokens, _ := detail["tokens"].(map[string]any)
+	if tokens == nil {
+		return 0
+	}
+	if raw := firstValue(tokens["total_tokens"], tokens["totalTokens"]); raw != nil && isNumberish(raw) {
+		return int64(numberFromAny(raw))
+	}
+	var total int64
+	for _, raw := range []any{
+		firstValue(tokens["input_tokens"], tokens["inputTokens"]),
+		firstValue(tokens["output_tokens"], tokens["outputTokens"]),
+		firstValue(tokens["reasoning_tokens"], tokens["reasoningTokens"]),
+	} {
+		if raw == nil || !isNumberish(raw) {
+			continue
+		}
+		total += int64(numberFromAny(raw))
+	}
+	return total
+}
+
 func filterReports(reports []quotaReport, plan, status string) []quotaReport {
 	var out []quotaReport
 	plan = strings.ToLower(strings.TrimSpace(plan))
@@ -589,6 +685,14 @@ func summarize(reports []quotaReport) summary {
 			case "plus":
 				sum.PlusEquivalent7D += *window7d.RemainingPercent
 			}
+		}
+
+		if report.tokenUsage.Available {
+			sum.TokenUsage.Available = true
+			sum.TokenUsage.Today += report.tokenUsage.Today
+			sum.TokenUsage.Last24Hours += report.tokenUsage.Last24Hours
+			sum.TokenUsage.Last7Days += report.tokenUsage.Last7Days
+			sum.TokenUsage.Last30Days += report.tokenUsage.Last30Days
 		}
 	}
 	return sum

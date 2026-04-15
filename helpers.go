@@ -333,6 +333,25 @@ func defaultString(v, fallback string) string {
 	return v
 }
 
+func formatInt64WithCommas(v int64) string {
+	sign := ""
+	if v < 0 {
+		sign = "-"
+		v = -v
+	}
+	raw := strconv.FormatInt(v, 10)
+	if len(raw) <= 3 {
+		return sign + raw
+	}
+	var parts []string
+	for len(raw) > 3 {
+		parts = append([]string{raw[len(raw)-3:]}, parts...)
+		raw = raw[:len(raw)-3]
+	}
+	parts = append([]string{raw}, parts...)
+	return sign + strings.Join(parts, ",")
+}
+
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {

@@ -199,6 +199,14 @@ func fetchAll(ctx context.Context, cfg config) ([]quotaReport, summary, error) {
 	if err != nil {
 		return nil, summary{}, err
 	}
+	if usageByAuth, err := fetchTokenUsageByAuth(ctx, cfg, time.Now()); err == nil {
+		for i := range reports {
+			reports[i].tokenUsage = tokenUsageSummary{Available: true}
+			if usage, ok := usageByAuth[reports[i].AuthIndex]; ok {
+				reports[i].tokenUsage = usage
+			}
+		}
+	}
 	return reports, summarize(reports), nil
 }
 
