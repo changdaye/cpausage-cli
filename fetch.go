@@ -217,11 +217,20 @@ func mergeMaps(base, extra map[string]string) map[string]string {
 	return out
 }
 
-func fetchTokenUsageByAuth(ctx context.Context, cfg config, now time.Time) (map[string]tokenUsageSummary, error) {
+type tokenUsageResult struct {
+	ByAuth          map[string]tokenUsageSummary
+	HistoryStart    time.Time
+	HistoryEnd      time.Time
+	Complete7Hours  bool
+	Complete24Hours bool
+	Complete7Days   bool
+}
+
+func fetchTokenUsageByAuth(ctx context.Context, cfg config, now time.Time) (tokenUsageResult, error) {
 	client := &http.Client{Timeout: cfg.Timeout}
 	payload, err := fetchJSON(ctx, client, cfg, cfg.BaseURL+"/v0/management/usage")
 	if err != nil {
-		return nil, err
+		return tokenUsageResult{}, err
 	}
 	return parseTokenUsageByAuth(payload, now), nil
 }
@@ -547,23 +556,23 @@ func shouldRetryError(message string) bool {
 	return false
 }
 
-func parseTokenUsageByAuth(payload map[string]any, now time.Time) map[string]tokenUsageSummary {
+func parseTokenUsageByAuth(payload map[string]any, now time.Time) tokenUsageResult {
 	usage, _ := payload["usage"].(map[string]any)
 	apis, _ := usage["apis"].(map[string]any)
 	if len(apis) == 0 {
-		return map[string]tokenUsageSummary{}
+		return tokenUsageResult{ByAuth: map[string]tokenUsageSummary{}}
 	}
 
 	if now.IsZero() {
 		now = time.Now()
 	}
-	loc := now.Location()
-	todayStart := time.Date(now.In(loc).Year(), now.In(loc).Month(), now.In(loc).Day(), 0, 0, 0, 0, loc)
+	last7Hours := now.Add(-7 * time.Hour)
 	last24Hours := now.Add(-24 * time.Hour)
 	last7Days := now.Add(-7 * 24 * time.Hour)
-	last30Days := now.Add(-30 * 24 * time.Hour)
 
 	out := make(map[string]tokenUsageSummary)
+	var historyStart time.Time
+	var historyEnd time.Time
 	for _, apiValue := range apis {
 		apiEntry, ok := apiValue.(map[string]any)
 		if !ok {
@@ -590,11 +599,17 @@ func parseTokenUsageByAuth(payload map[string]any, now time.Time) map[string]tok
 				if err != nil {
 					continue
 				}
+				if historyStart.IsZero() || timestamp.Before(historyStart) {
+					historyStart = timestamp
+				}
+				if historyEnd.IsZero() || timestamp.After(historyEnd) {
+					historyEnd = timestamp
+				}
 				totalTokens := tokenTotalFromDetail(detail)
 				current := out[authIndex]
 				current.Available = true
-				if !timestamp.In(loc).Before(todayStart) {
-					current.Today += totalTokens
+				if !timestamp.Before(last7Hours) {
+					current.Last7Hours += totalTokens
 				}
 				if !timestamp.Before(last24Hours) {
 					current.Last24Hours += totalTokens
@@ -602,14 +617,33 @@ func parseTokenUsageByAuth(payload map[string]any, now time.Time) map[string]tok
 				if !timestamp.Before(last7Days) {
 					current.Last7Days += totalTokens
 				}
-				if !timestamp.Before(last30Days) {
-					current.Last30Days += totalTokens
-				}
 				out[authIndex] = current
 			}
 		}
 	}
-	return out
+
+	result := tokenUsageResult{
+		ByAuth:       out,
+		HistoryStart: historyStart,
+		HistoryEnd:   historyEnd,
+	}
+	if historyStart.IsZero() {
+		return result
+	}
+	result.Complete7Hours = !historyStart.After(last7Hours)
+	result.Complete24Hours = !historyStart.After(last24Hours)
+	result.Complete7Days = !historyStart.After(last7Days)
+	return result
+}
+
+func formatTokenUsageHistoryTimestamp(value time.Time, loc *time.Location) string {
+	if value.IsZero() {
+		return ""
+	}
+	if loc == nil {
+		loc = time.Local
+	}
+	return value.In(loc).Format(time.RFC3339Nano)
 }
 
 func tokenTotalFromDetail(detail map[string]any) int64 {
@@ -688,11 +722,17 @@ func summarize(reports []quotaReport) summary {
 		}
 
 		if report.tokenUsage.Available {
-			sum.TokenUsage.Available = true
-			sum.TokenUsage.Today += report.tokenUsage.Today
+			if !sum.TokenUsage.Available {
+				sum.TokenUsage.Available = true
+				sum.TokenUsage.HistoryStart = report.tokenUsage.HistoryStart
+				sum.TokenUsage.HistoryEnd = report.tokenUsage.HistoryEnd
+				sum.TokenUsage.Complete7Hours = report.tokenUsage.Complete7Hours
+				sum.TokenUsage.Complete24Hours = report.tokenUsage.Complete24Hours
+				sum.TokenUsage.Complete7Days = report.tokenUsage.Complete7Days
+			}
+			sum.TokenUsage.Last7Hours += report.tokenUsage.Last7Hours
 			sum.TokenUsage.Last24Hours += report.tokenUsage.Last24Hours
 			sum.TokenUsage.Last7Days += report.tokenUsage.Last7Days
-			sum.TokenUsage.Last30Days += report.tokenUsage.Last30Days
 		}
 	}
 	return sum

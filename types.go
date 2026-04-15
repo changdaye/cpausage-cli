@@ -57,11 +57,15 @@ type quotaReport struct {
 }
 
 type tokenUsageSummary struct {
-	Available   bool  `json:"available"`
-	Today       int64 `json:"today"`
-	Last24Hours int64 `json:"last_24_hours"`
-	Last7Days   int64 `json:"last_7_days"`
-	Last30Days  int64 `json:"last_30_days"`
+	Available       bool   `json:"available"`
+	Last7Hours      int64  `json:"last_7_hours"`
+	Last24Hours     int64  `json:"last_24_hours"`
+	Last7Days       int64  `json:"last_7_days"`
+	HistoryStart    string `json:"history_start,omitempty"`
+	HistoryEnd      string `json:"history_end,omitempty"`
+	Complete7Hours  bool   `json:"complete_7_hours"`
+	Complete24Hours bool   `json:"complete_24_hours"`
+	Complete7Days   bool   `json:"complete_7_days"`
 }
 
 type summary struct {

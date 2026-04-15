@@ -199,10 +199,23 @@ func fetchAll(ctx context.Context, cfg config) ([]quotaReport, summary, error) {
 	if err != nil {
 		return nil, summary{}, err
 	}
-	if usageByAuth, err := fetchTokenUsageByAuth(ctx, cfg, time.Now()); err == nil {
+	if usageResult, err := fetchTokenUsageByAuth(ctx, cfg, time.Now()); err == nil {
 		for i := range reports {
-			reports[i].tokenUsage = tokenUsageSummary{Available: true}
-			if usage, ok := usageByAuth[reports[i].AuthIndex]; ok {
+			reports[i].tokenUsage = tokenUsageSummary{
+				Available:       true,
+				HistoryStart:    formatTokenUsageHistoryTimestamp(usageResult.HistoryStart, time.Local),
+				HistoryEnd:      formatTokenUsageHistoryTimestamp(usageResult.HistoryEnd, time.Local),
+				Complete7Hours:  usageResult.Complete7Hours,
+				Complete24Hours: usageResult.Complete24Hours,
+				Complete7Days:   usageResult.Complete7Days,
+			}
+			if usage, ok := usageResult.ByAuth[reports[i].AuthIndex]; ok {
+				usage.HistoryStart = reports[i].tokenUsage.HistoryStart
+				usage.HistoryEnd = reports[i].tokenUsage.HistoryEnd
+				usage.Complete7Hours = reports[i].tokenUsage.Complete7Hours
+				usage.Complete24Hours = reports[i].tokenUsage.Complete24Hours
+				usage.Complete7Days = reports[i].tokenUsage.Complete7Days
+				usage.Available = true
 				reports[i].tokenUsage = usage
 			}
 		}

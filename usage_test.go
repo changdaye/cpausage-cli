@@ -68,10 +68,11 @@ func TestParseTokenUsageByAuth(t *testing.T) {
 		},
 	}
 
-	got := parseTokenUsageByAuth(payload, now)
+	result := parseTokenUsageByAuth(payload, now)
+	got := result.ByAuth
 
-	if got["auth-a"].Today != 100 {
-		t.Fatalf("auth-a today = %d, want 100", got["auth-a"].Today)
+	if got["auth-a"].Last7Hours != 0 {
+		t.Fatalf("auth-a last7h = %d, want 0", got["auth-a"].Last7Hours)
 	}
 	if got["auth-a"].Last24Hours != 100 {
 		t.Fatalf("auth-a last24h = %d, want 100", got["auth-a"].Last24Hours)
@@ -79,12 +80,9 @@ func TestParseTokenUsageByAuth(t *testing.T) {
 	if got["auth-a"].Last7Days != 600 {
 		t.Fatalf("auth-a last7d = %d, want 600", got["auth-a"].Last7Days)
 	}
-	if got["auth-a"].Last30Days != 1000 {
-		t.Fatalf("auth-a last30d = %d, want 1000", got["auth-a"].Last30Days)
-	}
 
-	if got["auth-b"].Today != 55 {
-		t.Fatalf("auth-b today = %d, want 55", got["auth-b"].Today)
+	if got["auth-b"].Last7Hours != 55 {
+		t.Fatalf("auth-b last7h = %d, want 55", got["auth-b"].Last7Hours)
 	}
 	if got["auth-b"].Last24Hours != 55 {
 		t.Fatalf("auth-b last24h = %d, want 55", got["auth-b"].Last24Hours)
@@ -92,8 +90,15 @@ func TestParseTokenUsageByAuth(t *testing.T) {
 	if got["auth-b"].Last7Days != 55 {
 		t.Fatalf("auth-b last7d = %d, want 55", got["auth-b"].Last7Days)
 	}
-	if got["auth-b"].Last30Days != 55 {
-		t.Fatalf("auth-b last30d = %d, want 55", got["auth-b"].Last30Days)
+
+	if result.HistoryStart.IsZero() || result.HistoryStart.Format(time.RFC3339Nano) != "2026-03-10T03:00:00Z" {
+		t.Fatalf("history_start = %s, want %s", result.HistoryStart.Format(time.RFC3339Nano), "2026-03-10T03:00:00Z")
+	}
+	if result.HistoryEnd.IsZero() || result.HistoryEnd.Format(time.RFC3339Nano) != "2026-04-15T01:30:00Z" {
+		t.Fatalf("history_end = %s, want %s", result.HistoryEnd.Format(time.RFC3339Nano), "2026-04-15T01:30:00Z")
+	}
+	if !result.Complete7Hours || !result.Complete24Hours || !result.Complete7Days {
+		t.Fatalf("expected all token usage windows to be complete, got %+v", result)
 	}
 }
 
@@ -104,11 +109,15 @@ func TestSummarizeAggregatesTokenUsage(t *testing.T) {
 			PlanType: "free",
 			Status:   "high",
 			tokenUsage: tokenUsageSummary{
-				Available:   true,
-				Today:       10,
-				Last24Hours: 20,
-				Last7Days:   30,
-				Last30Days:  40,
+				Available:       true,
+				Last7Hours:      10,
+				Last24Hours:     20,
+				Last7Days:       30,
+				HistoryStart:    "2026-04-10T12:58:01+08:00",
+				HistoryEnd:      "2026-04-15T18:08:08+08:00",
+				Complete7Hours:  true,
+				Complete24Hours: true,
+				Complete7Days:   false,
 			},
 		},
 		{
@@ -116,11 +125,15 @@ func TestSummarizeAggregatesTokenUsage(t *testing.T) {
 			PlanType: "plus",
 			Status:   "low",
 			tokenUsage: tokenUsageSummary{
-				Available:   true,
-				Today:       1,
-				Last24Hours: 2,
-				Last7Days:   3,
-				Last30Days:  4,
+				Available:       true,
+				Last7Hours:      1,
+				Last24Hours:     2,
+				Last7Days:       3,
+				HistoryStart:    "2026-04-10T12:58:01+08:00",
+				HistoryEnd:      "2026-04-15T18:08:08+08:00",
+				Complete7Hours:  true,
+				Complete24Hours: true,
+				Complete7Days:   false,
 			},
 		},
 	})
@@ -128,8 +141,8 @@ func TestSummarizeAggregatesTokenUsage(t *testing.T) {
 	if !sum.TokenUsage.Available {
 		t.Fatalf("token usage should be available")
 	}
-	if sum.TokenUsage.Today != 11 {
-		t.Fatalf("today = %d, want 11", sum.TokenUsage.Today)
+	if sum.TokenUsage.Last7Hours != 11 {
+		t.Fatalf("last7h = %d, want 11", sum.TokenUsage.Last7Hours)
 	}
 	if sum.TokenUsage.Last24Hours != 22 {
 		t.Fatalf("last24h = %d, want 22", sum.TokenUsage.Last24Hours)
@@ -137,13 +150,40 @@ func TestSummarizeAggregatesTokenUsage(t *testing.T) {
 	if sum.TokenUsage.Last7Days != 33 {
 		t.Fatalf("last7d = %d, want 33", sum.TokenUsage.Last7Days)
 	}
-	if sum.TokenUsage.Last30Days != 44 {
-		t.Fatalf("last30d = %d, want 44", sum.TokenUsage.Last30Days)
+	if sum.TokenUsage.HistoryStart != "2026-04-10T12:58:01+08:00" {
+		t.Fatalf("history_start = %q, want %q", sum.TokenUsage.HistoryStart, "2026-04-10T12:58:01+08:00")
+	}
+	if sum.TokenUsage.HistoryEnd != "2026-04-15T18:08:08+08:00" {
+		t.Fatalf("history_end = %q, want %q", sum.TokenUsage.HistoryEnd, "2026-04-15T18:08:08+08:00")
+	}
+	if !sum.TokenUsage.Complete7Hours || !sum.TokenUsage.Complete24Hours {
+		t.Fatalf("7h/24h completeness should be preserved")
+	}
+	if sum.TokenUsage.Complete7Days {
+		t.Fatalf("7d completeness should remain false")
 	}
 }
 
 func TestFormatInt64WithCommas(t *testing.T) {
 	if got := formatInt64WithCommas(71323195); got != "71,323,195" {
 		t.Fatalf("formatInt64WithCommas() = %q, want %q", got, "71,323,195")
+	}
+}
+
+func TestFormatTokenUsageValueReturnsRawCounts(t *testing.T) {
+	usage := tokenUsageSummary{
+		Available:       true,
+		Last7Days:       123,
+		HistoryStart:    "2026-04-10T12:58:01+08:00",
+		Complete7Days:   false,
+		Complete7Hours:  true,
+		Complete24Hours: true,
+	}
+
+	if got := formatTokenUsageValue(usage, tokenUsageWindow7Days); got != "123" {
+		t.Fatalf("formatTokenUsageValue(7d) = %q", got)
+	}
+	if got := formatTokenUsageValue(usage, tokenUsageWindow7Hours); got != "0" {
+		t.Fatalf("formatTokenUsageValue(7h) = %q", got)
 	}
 }

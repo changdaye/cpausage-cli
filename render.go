@@ -16,10 +16,9 @@ func renderPlain(reports []quotaReport, sum summary, summaryOnly bool) {
 	fmt.Printf("Low: %d\n", sum.LowAccounts)
 	fmt.Printf("Errors: %d\n", sum.ErrorAccounts)
 	fmt.Printf("Free Equivalent 7d: %.0f%%\n", sum.FreeEquivalent7D)
-	fmt.Printf("Token Usage Today: %s\n", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Today))
-	fmt.Printf("Token Usage 24h: %s\n", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last24Hours))
-	fmt.Printf("Token Usage 7d: %s\n", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last7Days))
-	fmt.Printf("Token Usage 30d: %s\n", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last30Days))
+	fmt.Printf("Token Usage 7h: %s\n", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow7Hours))
+	fmt.Printf("Token Usage 24h: %s\n", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow24Hours))
+	fmt.Printf("Token Usage 7d: %s\n", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow7Days))
 	if summaryOnly {
 		return
 	}
@@ -147,10 +146,9 @@ func renderPrettyReportStyle1(reports []quotaReport, sum summary, cfg config) {
 	fmt.Println()
 	fmt.Println(themeTitle.Render("Summary"))
 	fmt.Println(themeDim.Render(fmt.Sprintf("free_equivalent_7d: %.0f%%", sum.FreeEquivalent7D)))
-	fmt.Println(themeDim.Render("token_usage_today: " + formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Today)))
-	fmt.Println(themeDim.Render("token_usage_24h: " + formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last24Hours)))
-	fmt.Println(themeDim.Render("token_usage_7d: " + formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last7Days)))
-	fmt.Println(themeDim.Render("token_usage_30d: " + formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last30Days)))
+	fmt.Println(themeDim.Render("token_usage_7h: " + formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow7Hours)))
+	fmt.Println(themeDim.Render("token_usage_24h: " + formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow24Hours)))
+	fmt.Println(themeDim.Render("token_usage_7d: " + formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow7Days)))
 }
 
 func renderPrettyReportStyle2(reports []quotaReport, sum summary, cfg config) {
@@ -234,10 +232,9 @@ func renderSummaryCards(sum summary, termWidth int) string {
 	}
 
 	tokenCards := []string{
-		renderMetricCard("Tokens Today", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Today), "", "#F97316", 18),
-		renderMetricCard("Tokens 24h", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last24Hours), "", "#FB923C", 18),
-		renderMetricCard("Tokens 7d", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last7Days), "", "#F59E0B", 18),
-		renderMetricCard("Tokens 30d", formatTokenUsageValue(sum.TokenUsage.Available, sum.TokenUsage.Last30Days), "", "#D97706", 18),
+		renderMetricCard("Tokens 7h", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow7Hours), "", "#F97316", 18),
+		renderMetricCard("Tokens 24h", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow24Hours), "", "#FB923C", 18),
+		renderMetricCard("Tokens 7d", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow7Days), "", "#F59E0B", 18),
 	}
 
 	return renderCardRows(summaryCards, termWidth, 2) + "\n\n" +
@@ -501,9 +498,28 @@ func asciiProgress(value *float64, width int) string {
 	return "[" + strings.Repeat("#", filled) + strings.Repeat("-", width-filled) + fmt.Sprintf("] %3.0f%%", v)
 }
 
-func formatTokenUsageValue(available bool, value int64) string {
-	if !available {
+const (
+	tokenUsageWindow7Hours  = "7h"
+	tokenUsageWindow24Hours = "24h"
+	tokenUsageWindow7Days   = "7d"
+)
+
+func formatTokenUsageValue(usage tokenUsageSummary, window string) string {
+	if !usage.Available {
 		return "-"
 	}
+
+	value := int64(0)
+	switch window {
+	case tokenUsageWindow7Hours:
+		value = usage.Last7Hours
+	case tokenUsageWindow24Hours:
+		value = usage.Last24Hours
+	case tokenUsageWindow7Days:
+		value = usage.Last7Days
+	default:
+		return "-"
+	}
+
 	return formatInt64WithCommas(value)
 }
