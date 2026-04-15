@@ -38,6 +38,7 @@ jobs:
           timestamp="$(date -u +'%Y%m%dt%H%M%S')"
           tag="v0.0.0-auto-${timestamp}-${short_sha}"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "title=cpausage 自动构建 · ${short_sha} · 多平台二进制" >> "$GITHUB_OUTPUT"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag "${tag}"
@@ -74,5 +75,5 @@ jobs:
           mapfile -t release_files < <(find dist -maxdepth 1 -type f -name 'cpausage_*' | sort)
           gh release create "${{ steps.meta.outputs.tag }}" "${release_files[@]}" \
             --repo "${{ github.repository }}" \
-            --title "自动发布 ${{ steps.meta.outputs.tag }}" \
+            --title "${{ steps.meta.outputs.title }}" \
             --generate-notes
