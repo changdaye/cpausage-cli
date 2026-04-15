@@ -19,13 +19,22 @@
 
 ### 方式 1：直接下载 GitHub Release
 
-仓库已配置自动 Release。每次代码 push 到 GitHub 后，都会自动生成一个新的 Release，并附带对应平台的二进制压缩包和校验文件。
+仓库已配置自动 Release。每次代码 push 到 GitHub 后，都会自动生成一个新的 Release，并附带对应平台的独立二进制文件。
 
-下载后解压，把 `cpausage` 放到你的 `PATH` 中即可，例如：
+可直接选择对应平台下载：
+
+- `cpausage_darwin_amd64`：macOS Intel
+- `cpausage_darwin_arm64`：macOS Apple Silicon
+- `cpausage_linux_amd64`：Linux x86_64
+- `cpausage_linux_arm64`：Linux ARM64
+- `cpausage_windows_amd64.exe`：Windows x86_64
+- `cpausage_windows_arm64.exe`：Windows ARM64
+
+下载后把文件改名为 `cpausage`（Windows 保留 `.exe`），再放到你的 `PATH` 中即可，例如：
 
 ```bash
-chmod +x cpausage
-mv cpausage /usr/local/bin/cpausage
+chmod +x cpausage_linux_amd64
+mv cpausage_linux_amd64 /usr/local/bin/cpausage
 ```
 
 ### 方式 2：本地构建
@@ -214,9 +223,9 @@ cpausage --style 2
 - 自动行为：
   - 运行 `go test ./...`
   - 自动生成一个新的 tag
-  - 使用 GoReleaser 构建多平台压缩包
+  - 交叉编译多平台二进制文件
   - 自动创建 GitHub Release
-  - 上传构建产物和校验文件
+  - 上传各平台二进制文件到 Release
 
 如果你把项目推到新的私有仓库，记得在 GitHub 仓库设置里启用 Actions，并允许 `GITHUB_TOKEN` 具备 `contents: write` 权限。
 
@@ -243,7 +252,7 @@ go build -o dist/cpausage .
 - `fetch.go`：请求、解析、状态计算
 - `render.go`：终端报表输出
 - `helpers.go`：通用辅助函数
-- `.goreleaser.yml`：Release 打包配置
+- `.github/workflows/auto-release.yml`：自动构建和发布多平台二进制
 
 ## 说明
 

@@ -3,7 +3,7 @@ name: Auto Release
 on:
   push:
     branches:
-      - "**"
+      - main
   workflow_dispatch:
 
 permissions:
@@ -45,21 +45,33 @@ jobs:
       - name: Push release tag
         run: git push origin "${{ steps.meta.outputs.tag }}"
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean --skip=publish
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GORELEASER_CURRENT_TAG: ${{ steps.meta.outputs.tag }}
+      - name: Build release binaries
+        run: |
+          mkdir -p dist
+          version="${{ steps.meta.outputs.tag }}"
+          commit="${GITHUB_SHA::7}"
+          build_date="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          while read -r goos goarch output; do
+            GOOS="${goos}" GOARCH="${goarch}" CGO_ENABLED=0 \
+              go build \
+              -trimpath \
+              -ldflags "-s -w -X main.Version=${version} -X main.Commit=${commit} -X main.BuildDate=${build_date}" \
+              -o "dist/${output}" .
+          done <<'EOF'
+          darwin amd64 cpausage_darwin_amd64
+          darwin arm64 cpausage_darwin_arm64
+          linux amd64 cpausage_linux_amd64
+          linux arm64 cpausage_linux_arm64
+          windows amd64 cpausage_windows_amd64.exe
+          windows arm64 cpausage_windows_arm64.exe
+          EOF
 
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mapfile -t release_files < <(find dist -maxdepth 1 -type f | sort)
+          mapfile -t release_files < <(find dist -maxdepth 1 -type f -name 'cpausage_*' | sort)
           gh release create "${{ steps.meta.outputs.tag }}" "${release_files[@]}" \
             --repo "${{ github.repository }}" \
             --title "自动发布 ${{ steps.meta.outputs.tag }}" \
