@@ -49,6 +49,7 @@ type quotaReport struct {
 	AuthIndex         string        `json:"auth_index,omitempty"`
 	AccountID         string        `json:"account_id,omitempty"`
 	PlanType          string        `json:"plan_type,omitempty"`
+	Disabled          bool          `json:"disabled"`
 	Status            string        `json:"status"`
 	Windows           []quotaWindow `json:"windows"`
 	AdditionalWindows []quotaWindow `json:"additional_windows"`

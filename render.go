@@ -10,9 +10,12 @@ import (
 	"golang.org/x/term"
 )
 
+const quotaBarCells = 20
+
 func renderPlain(reports []quotaReport, sum summary, summaryOnly bool) {
 	fmt.Printf("Accounts: %d\n", sum.Accounts)
 	fmt.Printf("Exhausted: %d\n", sum.ExhaustedAccounts)
+	fmt.Printf("Disabled: %d\n", sum.StatusCounts["disabled"])
 	fmt.Printf("Low: %d\n", sum.LowAccounts)
 	fmt.Printf("Errors: %d\n", sum.ErrorAccounts)
 	fmt.Printf("Free Equivalent 7d: %.0f%%\n", sum.FreeEquivalent7D)
@@ -23,7 +26,7 @@ func renderPlain(reports []quotaReport, sum summary, summaryOnly bool) {
 		return
 	}
 	for _, report := range reports {
-		fmt.Printf("\n%s [%s] %s\n", report.Name, defaultString(report.PlanType, "unknown"), report.Status)
+		fmt.Printf("\n%s [%s] %s switch=%s\n", report.Name, defaultString(report.PlanType, "unknown"), report.Status, accountSwitchLabel(report.Disabled))
 		if report.Error != "" {
 			fmt.Printf("  error: %s\n", report.Error)
 		}
@@ -54,8 +57,6 @@ func renderPrettyReportStyle1(reports []quotaReport, sum summary, cfg config) {
 	mediumStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#10B981"))
 	lowStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#F59E0B"))
 	errStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#EF4444"))
-	planPlus := lipgloss.NewStyle().Foreground(lipgloss.Color("#60A5FA"))
-	planTeam := lipgloss.NewStyle().Foreground(lipgloss.Color("#FACC15"))
 	tableHeader := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FED7AA"))
 	rowAlt := lipgloss.NewStyle().Foreground(lipgloss.Color("#F5F5F4"))
 	rowBase := lipgloss.NewStyle().Foreground(lipgloss.Color("#E7E5E4"))
@@ -70,16 +71,15 @@ func renderPrettyReportStyle1(reports []quotaReport, sum summary, cfg config) {
 	}
 
 	termWidth := detectTerminalWidth()
-	wName, wPlan, wStatus, wBar, wReset, wExtra := computeColumnWidths(termWidth)
+	wName, wStatus, wSwitch, wBar, wReset := computeColumnWidths(termWidth)
 
 	header := padRight("File", wName) + " " +
-		padRight("Plan", wPlan) + " " +
-		padRight("Status", wStatus) + " " +
 		padRight("Code 5h", wBar) + " " +
 		padRight("Reset 5h", wReset) + " " +
 		padRight("Code 7d", wBar) + " " +
 		padRight("Reset 7d", wReset) + " " +
-		padRight("Extra", wExtra)
+		padRight("Status", wStatus) + " " +
+		padRight("Switch", wSwitch)
 	fmt.Println(tableHeader.Render(header))
 	fmt.Println(themeDim.Render(strings.Repeat("-", lipgloss.Width(header))))
 
@@ -97,27 +97,21 @@ func renderPrettyReportStyle1(reports []quotaReport, sum summary, cfg config) {
 			statusStyled = mediumStyle.Render(statusStyled)
 		case "low":
 			statusStyled = lowStyle.Render(statusStyled)
+		case "disabled":
+			statusStyled = themeDim.Render(statusStyled)
 		default:
 			statusStyled = errStyle.Render(statusStyled)
 		}
 
-		planText := defaultString(report.PlanType, "-")
-		planStyled := padRight(planText, wPlan)
-		switch strings.ToLower(strings.TrimSpace(planText)) {
-		case "plus":
-			planStyled = planPlus.Render(planStyled)
-		case "team":
-			planStyled = planTeam.Render(planStyled)
-		}
+		switchStyled := renderAccountSwitch(report.Disabled, wSwitch)
 
 		row := padRight(truncate(report.Name, wName), wName) + " " +
-			planStyled + " " +
-			statusStyled + " " +
 			padRight(prettyBar(code5, wBar, cfg.ASCIIBars), wBar) + " " +
 			padRight(resetLabel(code5), wReset) + " " +
 			padRight(prettyBar(code7, wBar, cfg.ASCIIBars), wBar) + " " +
 			padRight(resetLabel(code7), wReset) + " " +
-			padRight(truncate(extraSummary(report.AdditionalWindows), wExtra), wExtra)
+			statusStyled + " " +
+			switchStyled
 
 		if i%2 == 0 {
 			fmt.Println(rowBase.Render(row))
@@ -131,7 +125,7 @@ func renderPrettyReportStyle1(reports []quotaReport, sum summary, cfg config) {
 
 	fmt.Println()
 	fmt.Println(themeTitle.Render("Status Overview"))
-	overviewHeader := padRight("Accounts", 10) + " " + padRight("Full", 8) + " " + padRight("High", 8) + " " + padRight("Medium", 8) + " " + padRight("Low", 8) + " " + padRight("Exhausted", 10) + " " + padRight("Errors", 8)
+	overviewHeader := padRight("Accounts", 10) + " " + padRight("Full", 8) + " " + padRight("High", 8) + " " + padRight("Medium", 8) + " " + padRight("Low", 8) + " " + padRight("Exhausted", 10) + " " + padRight("Disabled", 10)
 	fmt.Println(tableHeader.Render(overviewHeader))
 	fmt.Println(themeDim.Render(strings.Repeat("-", lipgloss.Width(overviewHeader))))
 	overviewLine := padRight(strconv.Itoa(sum.Accounts), 10) + " " +
@@ -140,7 +134,7 @@ func renderPrettyReportStyle1(reports []quotaReport, sum summary, cfg config) {
 		mediumStyle.Render(padRight(strconv.Itoa(sum.StatusCounts["medium"]), 8)) + " " +
 		lowStyle.Render(padRight(strconv.Itoa(sum.StatusCounts["low"]), 8)) + " " +
 		errStyle.Render(padRight(strconv.Itoa(sum.ExhaustedAccounts), 10)) + " " +
-		errStyle.Render(padRight(strconv.Itoa(sum.ErrorAccounts), 8))
+		themeDim.Render(padRight(strconv.Itoa(sum.StatusCounts["disabled"]), 10))
 	fmt.Println(rowBase.Render(overviewLine))
 
 	fmt.Println()
@@ -172,16 +166,15 @@ func renderPrettyReportStyle2(reports []quotaReport, sum summary, cfg config) {
 
 	fmt.Println()
 	fmt.Println(themeTitle.Render("Accounts"))
-	wName, wPlan, wStatus, wBar, wReset, wExtra := computeColumnWidths(termWidth)
+	wName, wStatus, wSwitch, wBar, wReset := computeColumnWidths(termWidth)
 
 	header := padRight("Account", wName) + " " +
-		padRight("Plan", wPlan) + " " +
-		padRight("Status", wStatus) + " " +
 		padRight("Code 5h", wBar) + " " +
 		padRight("Reset 5h", wReset) + " " +
 		padRight("Code 7d", wBar) + " " +
 		padRight("Reset 7d", wReset) + " " +
-		padRight("Extra", wExtra)
+		padRight("Status", wStatus) + " " +
+		padRight("Switch", wSwitch)
 	fmt.Println(tableHeader.Render(header))
 	fmt.Println(themeDim.Render(strings.Repeat("-", lipgloss.Width(header))))
 
@@ -194,22 +187,15 @@ func renderPrettyReportStyle2(reports []quotaReport, sum summary, cfg config) {
 			Foreground(lipgloss.Color(statusColor(report.Status))).
 			Render(padRight(report.Status, wStatus))
 
-		planText := defaultString(report.PlanType, "-")
-		planStyled := padRight(planText, wPlan)
-		if color := planColor(planText); color != "" {
-			planStyled = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(color)).
-				Render(planStyled)
-		}
+		switchStyled := renderAccountSwitch(report.Disabled, wSwitch)
 
 		row := padRight(truncate(report.Name, wName), wName) + " " +
-			planStyled + " " +
-			statusStyled + " " +
 			padRight(prettyBar(code5, wBar, cfg.ASCIIBars), wBar) + " " +
 			padRight(resetLabel(code5), wReset) + " " +
 			padRight(prettyBar(code7, wBar, cfg.ASCIIBars), wBar) + " " +
 			padRight(resetLabel(code7), wReset) + " " +
-			padRight(truncate(extraSummary(report.AdditionalWindows), wExtra), wExtra)
+			statusStyled + " " +
+			switchStyled
 
 		if i%2 == 0 {
 			fmt.Println(rowBase.Render(row))
@@ -327,6 +313,8 @@ func statusDisplayName(status string) string {
 		return "Low"
 	case "exhausted":
 		return "Exhausted"
+	case "disabled":
+		return "Disabled"
 	case "error":
 		return "Errors"
 	case "missing":
@@ -349,6 +337,8 @@ func statusColor(status string) string {
 		return "#10B981"
 	case "low":
 		return "#F59E0B"
+	case "disabled":
+		return "#A8A29E"
 	case "exhausted", "error", "missing", "unknown":
 		return "#EF4444"
 	default:
@@ -383,91 +373,100 @@ func isStdoutTerminal() bool {
 	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
-func computeColumnWidths(total int) (int, int, int, int, int, int) {
-	if total < 96 {
-		total = 96
-	}
-	wPlan, wStatus, wReset := 8, 10, 12
-	wName, wExtra, wBar := 28, 18, 22
+func computeColumnWidths(total int) (int, int, int, int, int) {
+	wSwitch, wStatus, wReset := 6, 10, 12
+	wName := 28
+	wBar := quotaBarDisplayWidth()
 	switch {
-	case total >= 170:
-		wName, wExtra, wBar = 36, 24, 28
-	case total >= 150:
-		wName, wExtra, wBar = 32, 22, 25
-	case total >= 130:
-		wName, wExtra, wBar = 28, 18, 21
-	case total >= 110:
-		wName, wExtra, wBar = 24, 12, 16
+	case total >= 180:
+		wName = 38
+	case total >= 160:
+		wName = 32
+	case total >= 140:
+		wName = 26
+	case total >= 120:
+		wName = 22
+	case total >= 112:
+		wName = 18
 	default:
-		wName, wExtra, wBar = 20, 8, 12
+		wName = 18
 	}
 	for {
-		current := wName + wPlan + wStatus + wBar + wReset + wBar + wReset + wExtra + 7
+		current := wName + wBar + wReset + wBar + wReset + wStatus + wSwitch + 6
 		if current <= total {
 			break
 		}
 		switch {
-		case wExtra > 8:
-			wExtra--
-		case wName > 18:
+		case wName > 12:
 			wName--
-		case wBar > 10:
-			wBar--
-		case wPlan > 6:
-			wPlan--
 		case wStatus > 8:
 			wStatus--
+		case wSwitch > 4:
+			wSwitch--
 		case wReset > 10:
 			wReset--
 		default:
-			return wName, wPlan, wStatus, wBar, wReset, wExtra
+			return wName, wStatus, wSwitch, wBar, wReset
 		}
 	}
-	return wName, wPlan, wStatus, wBar, wReset, wExtra
+	return wName, wStatus, wSwitch, wBar, wReset
+}
+
+func accountSwitchLabel(disabled bool) string {
+	if disabled {
+		return "off"
+	}
+	return "on"
+}
+
+func renderAccountSwitch(disabled bool, width int) string {
+	label := padRight(accountSwitchLabel(disabled), width)
+	if disabled {
+		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#EF4444")).Render(label)
+	}
+	return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#22C55E")).Render(label)
 }
 
 func prettyBar(window *quotaWindow, width int, ascii bool) string {
 	if window == nil || window.RemainingPercent == nil {
 		return "-"
 	}
-	if width < 8 {
-		return fmt.Sprintf("%3.0f%%", clampFloat(*window.RemainingPercent, 0, 100))
-	}
 	v := clampFloat(*window.RemainingPercent, 0, 100)
 	percent := fmt.Sprintf(" %3.0f%%", v)
-	barArea := width - displayWidth(percent) - 2
-	if barArea < 4 {
-		return fmt.Sprintf("%3.0f%%", v)
-	}
-	filled := int((v / 100 * float64(barArea)) + 0.5)
-	if filled > barArea {
-		filled = barArea
-	}
+	filled := quotaBarFilledCells(v)
 	unfilledStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#57534E"))
 	percentStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colorAtPercent(v))).Bold(true)
 	if ascii {
 		var b strings.Builder
 		for i := 0; i < filled; i++ {
-			posPct := (float64(i+1) / float64(max(1, barArea))) * 100
+			posPct := (float64(i+1) / float64(quotaBarCells)) * 100
 			segStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colorAtPercent(posPct)))
-			b.WriteString(segStyle.Render("="))
+			b.WriteString(segStyle.Render("#"))
 		}
-		body := b.String()
-		if filled < barArea {
-			arrowPct := (float64(max(1, filled)) / float64(max(1, barArea))) * 100
-			body += lipgloss.NewStyle().Foreground(lipgloss.Color(colorAtPercent(arrowPct))).Render(">")
-			body += unfilledStyle.Render(strings.Repeat(".", max(0, barArea-filled-1)))
-		}
-		return "[" + body + "]" + percentStyle.Render(percent)
+		b.WriteString(unfilledStyle.Render(strings.Repeat("-", max(0, quotaBarCells-filled))))
+		return "[" + b.String() + "]" + percentStyle.Render(percent)
 	}
 	var b strings.Builder
 	for i := 0; i < filled; i++ {
-		posPct := (float64(i+1) / float64(max(1, barArea))) * 100
+		posPct := (float64(i+1) / float64(quotaBarCells)) * 100
 		segStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colorAtPercent(posPct)))
 		b.WriteString(segStyle.Render("█"))
 	}
-	b.WriteString(unfilledStyle.Render(strings.Repeat("░", max(0, barArea-filled))))
+	b.WriteString(unfilledStyle.Render(strings.Repeat("░", max(0, quotaBarCells-filled))))
 	return "[" + b.String() + "]" + percentStyle.Render(percent)
+}
+
+func quotaBarFilledCells(value float64) int {
+	value = clampFloat(value, 0, 100)
+	filled := int((value / 100 * float64(quotaBarCells)) + 0.5)
+	if filled > quotaBarCells {
+		return quotaBarCells
+	}
+	return filled
+}
+
+func quotaBarDisplayWidth() int {
+	return quotaBarCells + 2 + len(" 100%")
 }
 
 func progressBar(window *quotaWindow) string {

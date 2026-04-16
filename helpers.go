@@ -108,7 +108,7 @@ func formatStatusCounts(m map[string]int) string {
 		return "-"
 	}
 
-	ordered := []string{"full", "high", "medium", "low", "exhausted", "error", "missing"}
+	ordered := []string{"full", "high", "medium", "low", "exhausted", "disabled", "error", "missing"}
 	seen := make(map[string]struct{}, len(m))
 	parts := make([]string, 0, len(m))
 

@@ -136,10 +136,15 @@ func querySingleQuota(ctx context.Context, client *http.Client, cfg config, entr
 		AuthIndex: cleanString(firstValue(entry.raw["auth_index"], entry.raw["authIndex"])),
 		AccountID: parseAccountID(entry.raw),
 		PlanType:  parsePlanType(entry.raw),
+		Disabled:  isAuthDisabled(entry.raw),
 		Status:    "unknown",
 	}
 	if report.Name == "" {
 		report.Name = "unknown"
+	}
+	if report.Disabled {
+		report.Status = deriveStatus(report)
+		return report, nil
 	}
 	if report.AuthIndex == "" {
 		report.Error = "missing auth_index"
@@ -175,6 +180,16 @@ func querySingleQuota(ctx context.Context, client *http.Client, cfg config, entr
 		statusCode := intFromAny(firstValue(response["status_code"], response["statusCode"]))
 		bodyValue := response["body"]
 		parsedBody, parseErr := parseBody(bodyValue)
+		if isTokenExpiredResponse(statusCode, parsedBody, bodyValue) {
+			lastErr = tokenExpiredErrorMessage(statusCode, parsedBody, bodyValue)
+			if err := disableAuthEntry(ctx, client, cfg, entry); err != nil {
+				lastErr = fmt.Sprintf("%s; disable account failed: %v", lastErr, err)
+			} else {
+				report.Disabled = true
+				lastErr += "; account disabled"
+			}
+			break
+		}
 		if statusCode < 200 || statusCode >= 300 {
 			lastErr = bodyString(bodyValue)
 			if lastErr == "" {
@@ -252,11 +267,19 @@ func fetchJSON(ctx context.Context, client *http.Client, cfg config, url string)
 }
 
 func postJSON(ctx context.Context, client *http.Client, cfg config, url string, payload map[string]any) (map[string]any, error) {
+	return sendJSON(ctx, client, cfg, http.MethodPost, url, payload)
+}
+
+func patchJSON(ctx context.Context, client *http.Client, cfg config, url string, payload map[string]any) (map[string]any, error) {
+	return sendJSON(ctx, client, cfg, http.MethodPatch, url, payload)
+}
+
+func sendJSON(ctx context.Context, client *http.Client, cfg config, method, url string, payload map[string]any) (map[string]any, error) {
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(raw))
+	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(raw))
 	if err != nil {
 		return nil, err
 	}
@@ -270,6 +293,18 @@ func postJSON(ctx context.Context, client *http.Client, cfg config, url string, 
 	}
 	defer resp.Body.Close()
 	return decodeResponse(resp)
+}
+
+func disableAuthEntry(ctx context.Context, client *http.Client, cfg config, entry authEntry) error {
+	name := authIdentifier(entry.raw)
+	if name == "" {
+		return errors.New("missing auth name or id")
+	}
+	_, err := patchJSON(ctx, client, cfg, cfg.BaseURL+"/v0/management/auth-files/status", map[string]any{
+		"name":     name,
+		"disabled": true,
+	})
+	return err
 }
 
 func decodeResponse(resp *http.Response) (map[string]any, error) {
@@ -303,6 +338,45 @@ func parseBody(body any) (map[string]any, error) {
 	default:
 		return nil, errors.New("invalid")
 	}
+}
+
+func isAuthDisabled(entry map[string]any) bool {
+	if boolFromAny(entry["disabled"]) {
+		return true
+	}
+	return strings.EqualFold(cleanString(entry["status"]), "disabled")
+}
+
+func authIdentifier(entry map[string]any) string {
+	return cleanString(firstValue(entry["name"], entry["id"]))
+}
+
+func isTokenExpiredResponse(statusCode int, parsedBody map[string]any, body any) bool {
+	if statusCode != http.StatusUnauthorized && intFromAny(firstValue(parsedBody["status"])) != http.StatusUnauthorized {
+		return false
+	}
+	if strings.EqualFold(cleanString(nested(parsedBody, "error", "code")), "token_expired") {
+		return true
+	}
+	message := strings.ToLower(cleanString(nested(parsedBody, "error", "message")))
+	if strings.Contains(message, "provided authentication token is expired") {
+		return true
+	}
+	raw := strings.ToLower(bodyString(body))
+	return strings.Contains(raw, "\"code\":\"token_expired\"") || strings.Contains(raw, "provided authentication token is expired")
+}
+
+func tokenExpiredErrorMessage(statusCode int, parsedBody map[string]any, body any) string {
+	if message := cleanString(nested(parsedBody, "error", "message")); message != "" {
+		return message
+	}
+	if raw := bodyString(body); raw != "" {
+		return raw
+	}
+	if statusCode > 0 {
+		return fmt.Sprintf("HTTP %d", statusCode)
+	}
+	return "token_expired"
 }
 
 func parseAccountID(entry map[string]any) string {
@@ -505,6 +579,9 @@ func formatResetLabel(window map[string]any) string {
 }
 
 func deriveStatus(report quotaReport) string {
+	if report.Disabled {
+		return "disabled"
+	}
 	if report.Error != "" {
 		return "error"
 	}
