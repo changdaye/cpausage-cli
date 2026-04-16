@@ -21,6 +21,7 @@ type config struct {
 	BaseURL       string
 	ManagementKey string
 	ConfigPath    string
+	StatePath     string
 	ShowVersion   bool
 	JSON          bool
 	Plain         bool
@@ -33,6 +34,7 @@ type config struct {
 	Concurrency   int
 	Timeout       time.Duration
 	RetryAttempts int
+	Now           func() time.Time
 }
 
 type quotaWindow struct {

@@ -56,6 +56,34 @@ func resolveConfigPath(explicitPath string) (string, error) {
 	return "", nil
 }
 
+func resolveStatePath(explicitConfigPath string) (string, error) {
+	if strings.TrimSpace(explicitConfigPath) != "" {
+		path, err := expandHomePath(strings.TrimSpace(explicitConfigPath))
+		if err != nil {
+			return "", err
+		}
+		return siblingStatePath(path), nil
+	}
+
+	configPath, err := resolveConfigPath("")
+	if err != nil {
+		return "", err
+	}
+	if configPath != "" {
+		return siblingStatePath(configPath), nil
+	}
+
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		base := strings.TrimSuffix(filepath.Base(exe), filepath.Ext(filepath.Base(exe)))
+		return filepath.Join(dir, base+".state.json"), nil
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".config", "cpa-usage", "state.json"), nil
+	}
+	return "", nil
+}
+
 func candidateConfigPaths() []string {
 	paths := []string{}
 	if exe, err := os.Executable(); err == nil {
@@ -111,4 +139,15 @@ func uniqueStrings(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func siblingStatePath(path string) string {
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext)
+	if name == "" {
+		name = "state"
+	}
+	return filepath.Join(dir, name+".state.json")
 }

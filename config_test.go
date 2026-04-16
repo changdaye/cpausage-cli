@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
 )
 
@@ -126,5 +127,15 @@ func TestNormalizePrettyStyle(t *testing.T) {
 				t.Fatalf("normalizePrettyStyle(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestResolveStatePathForExplicitConfig(t *testing.T) {
+	path, err := resolveStatePath("~/custom/cpausage.json")
+	if err != nil {
+		t.Fatalf("resolveStatePath() error = %v", err)
+	}
+	if filepath.Base(path) != "cpausage.state.json" {
+		t.Fatalf("resolveStatePath() base = %q, want %q", filepath.Base(path), "cpausage.state.json")
 	}
 }

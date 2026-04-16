@@ -77,7 +77,7 @@ func TestQuerySingleQuotaReturnsDisabledWithoutQuotaRequest(t *testing.T) {
 			"provider":   "codex",
 			"disabled":   true,
 		},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("querySingleQuota() error = %v", err)
 	}
@@ -151,7 +151,7 @@ func TestQuerySingleQuotaDisablesExpiredTokenAccount(t *testing.T) {
 				"chatgpt_account_id": "acct-1",
 			},
 		},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("querySingleQuota() error = %v", err)
 	}
@@ -176,5 +176,145 @@ func TestQuerySingleQuotaDisablesExpiredTokenAccount(t *testing.T) {
 	}
 	if report.Status != "disabled" {
 		t.Fatalf("report.Status = %q, want %q", report.Status, "disabled")
+	}
+}
+
+func TestQuerySingleQuotaProbesAutoDisabledAccountOncePerDay(t *testing.T) {
+	t.Helper()
+
+	var apiCallCount int
+	tracker := &disabledAccountTracker{
+		today: "2026-04-16",
+		accounts: map[string]disabledAccountState{
+			"auto-disabled-auth": {LastProbeDay: "2026-04-16"},
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v0/management/api-call" {
+			apiCallCount++
+		}
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	report, err := querySingleQuota(context.Background(), server.Client(), config{
+		BaseURL:       server.URL,
+		Timeout:       time.Second,
+		RetryAttempts: 3,
+	}, authEntry{
+		raw: map[string]any{
+			"name":       "auto-disabled-auth",
+			"auth_index": "auth-1",
+			"provider":   "codex",
+			"disabled":   true,
+		},
+	}, tracker)
+	if err != nil {
+		t.Fatalf("querySingleQuota() error = %v", err)
+	}
+
+	if apiCallCount != 0 {
+		t.Fatalf("apiCallCount = %d, want 0", apiCallCount)
+	}
+	if !report.Disabled {
+		t.Fatalf("report.Disabled = false, want true")
+	}
+	if report.Status != "disabled" {
+		t.Fatalf("report.Status = %q, want %q", report.Status, "disabled")
+	}
+}
+
+func TestQuerySingleQuotaReenablesRecoveredAutoDisabledAccount(t *testing.T) {
+	t.Helper()
+
+	var apiCallCount int
+	var enableRequestBody string
+	var enableCalls int
+	tracker := &disabledAccountTracker{
+		today: "2026-04-16",
+		accounts: map[string]disabledAccountState{
+			"auto-disabled-auth": {LastProbeDay: "2026-04-15"},
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v0/management/api-call":
+			apiCallCount++
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"status_code": http.StatusOK,
+				"body": map[string]any{
+					"plan_type": "plus",
+					"rate_limit": map[string]any{
+						"allowed": true,
+						"used": map[string]any{
+							"percentage": 25,
+						},
+						"resets_at": time.Now().Add(time.Hour).Unix(),
+						"reset_at":  time.Now().Add(time.Hour).Unix(),
+					},
+					"access_until": time.Now().Add(24 * time.Hour).Unix(),
+				},
+			})
+		case "/v0/management/auth-files/status":
+			if r.Method != http.MethodPatch {
+				t.Fatalf("auth-files/status method = %s, want PATCH", r.Method)
+			}
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read patch body: %v", err)
+			}
+			enableRequestBody = string(raw)
+			enableCalls++
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"status":   "ok",
+				"disabled": false,
+			})
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	report, err := querySingleQuota(context.Background(), server.Client(), config{
+		BaseURL:       server.URL,
+		Timeout:       time.Second,
+		RetryAttempts: 3,
+	}, authEntry{
+		raw: map[string]any{
+			"name":       "auto-disabled-auth",
+			"auth_index": "auth-1",
+			"provider":   "codex",
+			"disabled":   true,
+			"id_token": map[string]any{
+				"chatgpt_account_id": "acct-1",
+			},
+		},
+	}, tracker)
+	if err != nil {
+		t.Fatalf("querySingleQuota() error = %v", err)
+	}
+
+	if apiCallCount != 1 {
+		t.Fatalf("apiCallCount = %d, want 1", apiCallCount)
+	}
+	if enableCalls != 1 {
+		t.Fatalf("enableCalls = %d, want 1", enableCalls)
+	}
+	if !strings.Contains(enableRequestBody, `"name":"auto-disabled-auth"`) {
+		t.Fatalf("enable request body = %s", enableRequestBody)
+	}
+	if !strings.Contains(enableRequestBody, `"disabled":false`) {
+		t.Fatalf("enable request body = %s", enableRequestBody)
+	}
+	if report.Disabled {
+		t.Fatalf("report.Disabled = true, want false")
+	}
+	if report.Status == "disabled" {
+		t.Fatalf("report.Status = %q, want non-disabled", report.Status)
+	}
+	if _, ok := tracker.accounts["auto-disabled-auth"]; ok {
+		t.Fatalf("tracker entry still exists after successful re-enable")
 	}
 }

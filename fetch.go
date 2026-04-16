@@ -47,6 +47,10 @@ func queryAllQuotas(ctx context.Context, cfg config, auths []authEntry, showProg
 	if len(auths) == 0 {
 		return []quotaReport{}, nil
 	}
+	tracker, err := loadDisabledAccountTracker(cfg.StatePath, configNow(cfg))
+	if err != nil {
+		return nil, err
+	}
 	client := &http.Client{Timeout: cfg.Timeout}
 	reports := make([]quotaReport, len(auths))
 	errCh := make(chan error, len(auths))
@@ -61,7 +65,7 @@ func queryAllQuotas(ctx context.Context, cfg config, auths []authEntry, showProg
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			report, err := querySingleQuota(ctx, client, cfg, auths[i])
+			report, err := querySingleQuota(ctx, client, cfg, auths[i], tracker)
 			if err != nil {
 				errCh <- err
 				return
@@ -100,6 +104,9 @@ func queryAllQuotas(ctx context.Context, cfg config, auths []authEntry, showProg
 			return nil, err
 		}
 	}
+	if err := tracker.save(); err != nil {
+		return nil, err
+	}
 
 	sort.Slice(reports, func(i, j int) bool {
 		return strings.ToLower(reports[i].Name) < strings.ToLower(reports[j].Name)
@@ -130,21 +137,31 @@ func renderFetchProgress(done, total int, current string) {
 	fmt.Printf("\r%s %s %3.0f%% %s", left, bar, pct, name)
 }
 
-func querySingleQuota(ctx context.Context, client *http.Client, cfg config, entry authEntry) (quotaReport, error) {
+func querySingleQuota(ctx context.Context, client *http.Client, cfg config, entry authEntry, tracker *disabledAccountTracker) (quotaReport, error) {
+	authName := authIdentifier(entry.raw)
+	entryDisabled := isAuthDisabled(entry.raw)
+	shouldProbeDisabled := entryDisabled && tracker != nil && tracker.shouldProbe(authName)
+
 	report := quotaReport{
 		Name:      cleanString(firstValue(entry.raw["name"], entry.raw["id"], "unknown")),
 		AuthIndex: cleanString(firstValue(entry.raw["auth_index"], entry.raw["authIndex"])),
 		AccountID: parseAccountID(entry.raw),
 		PlanType:  parsePlanType(entry.raw),
-		Disabled:  isAuthDisabled(entry.raw),
+		Disabled:  entryDisabled,
 		Status:    "unknown",
 	}
 	if report.Name == "" {
 		report.Name = "unknown"
 	}
-	if report.Disabled {
+	if !entryDisabled && tracker != nil {
+		tracker.clear(authName)
+	}
+	if report.Disabled && !shouldProbeDisabled {
 		report.Status = deriveStatus(report)
 		return report, nil
+	}
+	if shouldProbeDisabled {
+		tracker.markProbeAttempt(authName)
 	}
 	if report.AuthIndex == "" {
 		report.Error = "missing auth_index"
@@ -186,6 +203,9 @@ func querySingleQuota(ctx context.Context, client *http.Client, cfg config, entr
 				lastErr = fmt.Sprintf("%s; disable account failed: %v", lastErr, err)
 			} else {
 				report.Disabled = true
+				if tracker != nil {
+					tracker.markAutoDisabled(authName)
+				}
 				lastErr += "; account disabled"
 			}
 			break
@@ -212,6 +232,20 @@ func querySingleQuota(ctx context.Context, client *http.Client, cfg config, entr
 		report.Windows = parseCodexWindows(parsedBody)
 		report.AdditionalWindows = parseAdditionalWindows(parsedBody)
 		report.Error = ""
+		if entryDisabled && shouldProbeDisabled {
+			if err := enableAuthEntry(ctx, client, cfg, entry); err != nil {
+				report.Disabled = true
+				report.Error = fmt.Sprintf("quota probe succeeded; enable account failed: %v", err)
+				if tracker != nil {
+					tracker.markAutoDisabled(authName)
+				}
+			} else {
+				report.Disabled = false
+				if tracker != nil {
+					tracker.clear(authName)
+				}
+			}
+		}
 		report.Status = deriveStatus(report)
 		return report, nil
 	}
@@ -296,13 +330,21 @@ func sendJSON(ctx context.Context, client *http.Client, cfg config, method, url 
 }
 
 func disableAuthEntry(ctx context.Context, client *http.Client, cfg config, entry authEntry) error {
+	return setAuthEntryDisabled(ctx, client, cfg, entry, true)
+}
+
+func enableAuthEntry(ctx context.Context, client *http.Client, cfg config, entry authEntry) error {
+	return setAuthEntryDisabled(ctx, client, cfg, entry, false)
+}
+
+func setAuthEntryDisabled(ctx context.Context, client *http.Client, cfg config, entry authEntry, disabled bool) error {
 	name := authIdentifier(entry.raw)
 	if name == "" {
 		return errors.New("missing auth name or id")
 	}
 	_, err := patchJSON(ctx, client, cfg, cfg.BaseURL+"/v0/management/auth-files/status", map[string]any{
 		"name":     name,
-		"disabled": true,
+		"disabled": disabled,
 	})
 	return err
 }
@@ -377,6 +419,13 @@ func tokenExpiredErrorMessage(statusCode int, parsedBody map[string]any, body an
 		return fmt.Sprintf("HTTP %d", statusCode)
 	}
 	return "token_expired"
+}
+
+func configNow(cfg config) time.Time {
+	if cfg.Now != nil {
+		return cfg.Now()
+	}
+	return time.Now()
 }
 
 func parseAccountID(entry map[string]any) string {

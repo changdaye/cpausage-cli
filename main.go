@@ -94,6 +94,10 @@ func parseFlags() (config, error) {
 	if err != nil {
 		return config{}, err
 	}
+	cfg.StatePath, err = resolveStatePath(cfg.ConfigPath)
+	if err != nil {
+		return config{}, err
+	}
 
 	cfg.BaseURL = resolveBaseURL(baseURLFlag, fileCfg)
 	cfg.ManagementKey = resolveManagementKey(managementSecret, fileCfg)
@@ -107,6 +111,7 @@ func parseFlags() (config, error) {
 		*timeoutSeconds = defaultTimeoutSeconds
 	}
 	cfg.Timeout = time.Duration(*timeoutSeconds) * time.Second
+	cfg.Now = time.Now
 	return cfg, nil
 }
 
