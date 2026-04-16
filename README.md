@@ -10,6 +10,9 @@
 
 - 读取 CPA 管理接口中的认证文件列表
 - 批量查询账号真实配额窗口
+- 遇到 `token_expired` 时自动关闭对应账号
+- 保留并展示账号开关状态（`Switch` 为 `on/off`）
+- `Code 5h` / `Code 7d` 使用固定 20 格进度条，每格 5%
 - 按计划类型和剩余额度排序
 - 输出彩色表格、纯文本汇总或 JSON
 - 支持环境变量、命令行参数和 JSON 配置文件
@@ -184,17 +187,27 @@ cpausage \
 - `medium`
 - `low`
 - `exhausted`
+- `disabled`
+- `error`
+- `missing`
 
-底部 `status_counts` 的展示顺序也是按额度从多到少固定输出：
+其中：
+
+- `disabled` 表示账号在 CPA 中已关闭，此类账号会保留在报表里，但不会继续发起 quota 查询
+- 当上游返回 `401` 且错误码为 `token_expired` 时，工具会先调用 CPA 管理接口关闭该账号，再把它显示为 `disabled`
+- `Switch` 列显示账号当前开关状态，`on` 为启用，`off` 为关闭
+- `Code 5h` / `Code 7d` 进度条固定为 20 格，每格代表 5%
+
+`status_counts` 的固定顺序如下：
 
 ```text
-full -> high -> medium -> low -> exhausted
+full -> high -> medium -> low -> exhausted -> disabled -> error -> missing
 ```
 
 美化输出支持两种样式：
 
-- `--style 1`：经典表格，保持原有汇总区和明细表
-- `--style 2`：卡片摘要样式，顶部显示连接信息，底部显示 `Total / Free / Plus` 和状态卡片
+- `--style 1`：经典表格，列顺序为 `File / Code 5h / Reset 5h / Code 7d / Reset 7d / Status / Switch`
+- `--style 2`：卡片摘要样式，顶部显示连接信息，中间显示同样的账号表格，底部显示 `Total / Free` 和 token usage 卡片
 
 推荐用法：
 
