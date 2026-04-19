@@ -22,6 +22,7 @@ func renderPlain(reports []quotaReport, sum summary, summaryOnly bool) {
 	fmt.Printf("Token Usage 7h: %s\n", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow7Hours))
 	fmt.Printf("Token Usage 24h: %s\n", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow24Hours))
 	fmt.Printf("Token Usage 7d: %s\n", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow7Days))
+	fmt.Printf("Token Usage All: %s\n", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindowAll))
 	if summaryOnly {
 		return
 	}
@@ -143,6 +144,7 @@ func renderPrettyReportStyle1(reports []quotaReport, sum summary, cfg config) {
 	fmt.Println(themeDim.Render("token_usage_7h: " + formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow7Hours)))
 	fmt.Println(themeDim.Render("token_usage_24h: " + formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow24Hours)))
 	fmt.Println(themeDim.Render("token_usage_7d: " + formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow7Days)))
+	fmt.Println(themeDim.Render("token_usage_all: " + formatTokenUsageValue(sum.TokenUsage, tokenUsageWindowAll)))
 }
 
 func renderPrettyReportStyle2(reports []quotaReport, sum summary, cfg config) {
@@ -221,6 +223,7 @@ func renderSummaryCards(sum summary, termWidth int) string {
 		renderMetricCard("Tokens 7h", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow7Hours), "", "#F97316", 18),
 		renderMetricCard("Tokens 24h", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow24Hours), "", "#FB923C", 18),
 		renderMetricCard("Tokens 7d", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindow7Days), "", "#F59E0B", 18),
+		renderMetricCard("Tokens All", formatTokenUsageValue(sum.TokenUsage, tokenUsageWindowAll), "", "#D97706", 18),
 	}
 
 	return renderCardRows(summaryCards, termWidth, 2) + "\n\n" +
@@ -501,6 +504,7 @@ const (
 	tokenUsageWindow7Hours  = "7h"
 	tokenUsageWindow24Hours = "24h"
 	tokenUsageWindow7Days   = "7d"
+	tokenUsageWindowAll     = "all"
 )
 
 func formatTokenUsageValue(usage tokenUsageSummary, window string) string {
@@ -510,6 +514,8 @@ func formatTokenUsageValue(usage tokenUsageSummary, window string) string {
 
 	value := int64(0)
 	switch window {
+	case tokenUsageWindowAll:
+		value = usage.AllTime
 	case tokenUsageWindow7Hours:
 		value = usage.Last7Hours
 	case tokenUsageWindow24Hours:

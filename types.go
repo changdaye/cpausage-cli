@@ -61,6 +61,7 @@ type quotaReport struct {
 
 type tokenUsageSummary struct {
 	Available       bool   `json:"available"`
+	AllTime         int64  `json:"all_time"`
 	Last7Hours      int64  `json:"last_7_hours"`
 	Last24Hours     int64  `json:"last_24_hours"`
 	Last7Days       int64  `json:"last_7_days"`

@@ -734,6 +734,7 @@ func parseTokenUsageByAuth(payload map[string]any, now time.Time) tokenUsageResu
 				totalTokens := tokenTotalFromDetail(detail)
 				current := out[authIndex]
 				current.Available = true
+				current.AllTime += totalTokens
 				if !timestamp.Before(last7Hours) {
 					current.Last7Hours += totalTokens
 				}
@@ -859,6 +860,7 @@ func summarize(reports []quotaReport) summary {
 			sum.TokenUsage.Last7Hours += report.tokenUsage.Last7Hours
 			sum.TokenUsage.Last24Hours += report.tokenUsage.Last24Hours
 			sum.TokenUsage.Last7Days += report.tokenUsage.Last7Days
+			sum.TokenUsage.AllTime += report.tokenUsage.AllTime
 		}
 	}
 	return sum

@@ -1,6 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"io"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -80,6 +84,9 @@ func TestParseTokenUsageByAuth(t *testing.T) {
 	if got["auth-a"].Last7Days != 600 {
 		t.Fatalf("auth-a last7d = %d, want 600", got["auth-a"].Last7Days)
 	}
+	if got["auth-a"].AllTime != 1500 {
+		t.Fatalf("auth-a all = %d, want 1500", got["auth-a"].AllTime)
+	}
 
 	if got["auth-b"].Last7Hours != 55 {
 		t.Fatalf("auth-b last7h = %d, want 55", got["auth-b"].Last7Hours)
@@ -89,6 +96,9 @@ func TestParseTokenUsageByAuth(t *testing.T) {
 	}
 	if got["auth-b"].Last7Days != 55 {
 		t.Fatalf("auth-b last7d = %d, want 55", got["auth-b"].Last7Days)
+	}
+	if got["auth-b"].AllTime != 55 {
+		t.Fatalf("auth-b all = %d, want 55", got["auth-b"].AllTime)
 	}
 
 	if result.HistoryStart.IsZero() || result.HistoryStart.Format(time.RFC3339Nano) != "2026-03-10T03:00:00Z" {
@@ -110,6 +120,7 @@ func TestSummarizeAggregatesTokenUsage(t *testing.T) {
 			Status:   "high",
 			tokenUsage: tokenUsageSummary{
 				Available:       true,
+				AllTime:         100,
 				Last7Hours:      10,
 				Last24Hours:     20,
 				Last7Days:       30,
@@ -126,6 +137,7 @@ func TestSummarizeAggregatesTokenUsage(t *testing.T) {
 			Status:   "low",
 			tokenUsage: tokenUsageSummary{
 				Available:       true,
+				AllTime:         10,
 				Last7Hours:      1,
 				Last24Hours:     2,
 				Last7Days:       3,
@@ -149,6 +161,9 @@ func TestSummarizeAggregatesTokenUsage(t *testing.T) {
 	}
 	if sum.TokenUsage.Last7Days != 33 {
 		t.Fatalf("last7d = %d, want 33", sum.TokenUsage.Last7Days)
+	}
+	if sum.TokenUsage.AllTime != 110 {
+		t.Fatalf("all = %d, want 110", sum.TokenUsage.AllTime)
 	}
 	if sum.TokenUsage.HistoryStart != "2026-04-10T12:58:01+08:00" {
 		t.Fatalf("history_start = %q, want %q", sum.TokenUsage.HistoryStart, "2026-04-10T12:58:01+08:00")
@@ -174,6 +189,7 @@ func TestFormatTokenUsageValueReturnsRawCounts(t *testing.T) {
 	usage := tokenUsageSummary{
 		Available:       true,
 		Last7Days:       123,
+		AllTime:         456,
 		HistoryStart:    "2026-04-10T12:58:01+08:00",
 		Complete7Days:   false,
 		Complete7Hours:  true,
@@ -186,4 +202,56 @@ func TestFormatTokenUsageValueReturnsRawCounts(t *testing.T) {
 	if got := formatTokenUsageValue(usage, tokenUsageWindow7Hours); got != "0" {
 		t.Fatalf("formatTokenUsageValue(7h) = %q", got)
 	}
+	if got := formatTokenUsageValue(usage, tokenUsageWindowAll); got != "456" {
+		t.Fatalf("formatTokenUsageValue(all) = %q", got)
+	}
+}
+
+func TestRenderPlainIncludesTokenUsageAll(t *testing.T) {
+	sum := summary{
+		Accounts: 1,
+		TokenUsage: tokenUsageSummary{
+			Available: true,
+			AllTime:   456,
+		},
+	}
+
+	output := captureStdout(t, func() {
+		renderPlain(nil, sum, true)
+	})
+
+	if !strings.Contains(output, "Token Usage All: 456") {
+		t.Fatalf("renderPlain output missing token usage all line:\n%s", output)
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	original := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+
+	os.Stdout = writer
+	defer func() {
+		os.Stdout = original
+	}()
+
+	fn()
+
+	if err := writer.Close(); err != nil {
+		t.Fatalf("writer.Close() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, reader); err != nil {
+		t.Fatalf("io.Copy() error = %v", err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("reader.Close() error = %v", err)
+	}
+
+	return buf.String()
 }
