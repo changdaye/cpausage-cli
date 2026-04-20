@@ -1,0 +1,128 @@
+{
+  "default_category": "其他更新",
+  "fallback_prefix": "更新：",
+  "category_order": [
+    "功能更新",
+    "问题修复",
+    "发布与工程",
+    "文档更新",
+    "测试与内部整理",
+    "其他更新"
+  ],
+  "category_map": {
+    "feat": "功能更新",
+    "fix": "问题修复",
+    "ci": "发布与工程",
+    "chore": "发布与工程",
+    "build": "发布与工程",
+    "docs": "文档更新",
+    "test": "测试与内部整理",
+    "refactor": "测试与内部整理",
+    "perf": "测试与内部整理",
+    "other": "其他更新"
+  },
+  "type_prefix_map": {
+    "feat": "新增：",
+    "fix": "修复：",
+    "ci": "工程：",
+    "chore": "维护：",
+    "build": "构建：",
+    "docs": "文档：",
+    "test": "测试：",
+    "refactor": "整理：",
+    "perf": "优化：",
+    "other": "更新："
+  },
+  "exact_map": {
+    "add all-time token usage summary": {
+      "summary": "新增累计 Token 用量汇总",
+      "category": "功能更新"
+    },
+    "add daily recheck for auto-disabled accounts": {
+      "summary": "新增自动禁用账号的每日复检",
+      "category": "功能更新"
+    },
+    "disable expired auths and update quota table": {
+      "summary": "过期授权会自动禁用，并同步更新配额表",
+      "category": "问题修复"
+    },
+    "publish plain release binaries": {
+      "summary": "Release 附件改为直接提供各平台二进制",
+      "category": "发布与工程"
+    },
+    "simplify token usage windows": {
+      "summary": "简化 Token 用量时间窗口展示",
+      "category": "功能更新"
+    },
+    "update readme for current quota output": {
+      "summary": "更新 README，补充当前配额输出说明",
+      "category": "文档更新"
+    }
+  },
+  "summary_rules": [
+    {
+      "pattern": "all-time token usage summary",
+      "summary": "新增累计 Token 用量汇总",
+      "category": "功能更新"
+    },
+    {
+      "pattern": "token usage summary windows",
+      "summary": "新增 Token 用量摘要时间窗口",
+      "category": "功能更新"
+    },
+    {
+      "pattern": "daily recheck for auto-disabled accounts",
+      "summary": "新增自动禁用账号的每日复检",
+      "category": "功能更新"
+    },
+    {
+      "pattern": "expired auths?.*quota table",
+      "summary": "过期授权会自动禁用，并同步更新配额表",
+      "category": "问题修复"
+    },
+    {
+      "pattern": "plain release binaries",
+      "summary": "Release 附件改为直接提供各平台二进制",
+      "category": "发布与工程"
+    },
+    {
+      "pattern": "release title",
+      "summary": "优化 Release 标题展示",
+      "category": "发布与工程"
+    },
+    {
+      "pattern": "current quota output",
+      "summary": "更新 README，补充当前配额输出说明",
+      "category": "文档更新"
+    },
+    {
+      "pattern": "repository agent guidelines",
+      "summary": "补充仓库协作规范说明",
+      "category": "文档更新"
+    }
+  ],
+  "phrase_map": {
+    "all time": "累计",
+    "token usage": "Token 用量",
+    "summary": "汇总",
+    "windows": "时间窗口",
+    "window": "时间窗口",
+    "daily recheck": "每日复检",
+    "auto disabled accounts": "自动禁用账号",
+    "expired auths": "过期授权",
+    "quota table": "配额表",
+    "quota output": "配额输出",
+    "readme": "README",
+    "release title": "Release 标题",
+    "release binaries": "Release 二进制",
+    "plain": "直接",
+    "publish": "发布",
+    "use": "使用",
+    "improve": "优化",
+    "update": "更新",
+    "add": "新增",
+    "disable": "禁用",
+    "simplify": "简化",
+    "fix": "修复"
+  }
+}

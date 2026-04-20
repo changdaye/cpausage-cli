@@ -240,6 +240,20 @@ cpausage --style 2
   - 交叉编译多平台二进制文件
   - 自动创建 GitHub Release
   - 上传各平台二进制文件到 Release
+  - 使用 `scripts/generate_release_notes.py` 生成用户可读的中文更新说明
+
+Release Notes 生成优先级如下：
+
+1. 提交说明中的 `Release-note-zh:` / `Release-note-cn:` trailer
+2. `.github/release-note-mapping.json` 中维护的中文摘要映射
+3. 通用中文归类与短语翻译回退规则
+
+如果你想为某次提交指定更自然的中文摘要，可以在 commit message body 中追加类似内容：
+
+```text
+Release-note-zh: 新增累计 Token 用量汇总
+Release-note-category: 功能更新
+```
 
 如果你把项目推到新的私有仓库，记得在 GitHub 仓库设置里启用 Actions，并允许 `GITHUB_TOKEN` 具备 `contents: write` 权限。
 

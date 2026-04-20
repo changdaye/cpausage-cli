@@ -67,6 +67,12 @@ jobs:
           windows arm64 cpausage_windows_arm64.exe
           EOF
 
+      - name: Generate Chinese release notes
+        run: |
+          python3 scripts/generate_release_notes.py \
+            --current-tag "${{ steps.meta.outputs.tag }}" \
+            --output dist/release-notes.md
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -75,4 +81,4 @@ jobs:
           gh release create "${{ steps.meta.outputs.tag }}" "${release_files[@]}" \
             --repo "${{ github.repository }}" \
             --title "${{ steps.meta.outputs.tag }}" \
-            --generate-notes
+            --notes-file dist/release-notes.md
